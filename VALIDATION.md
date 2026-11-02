@@ -1,5 +1,42 @@
 # Validation and compatibility
 
+## 0.21 keyboard-focus fix: current validation
+
+Based on 0.20 commit `8c8067827c78e7235e5969cfc3c69d4467979e26`.
+Compilation now uses the official API 37.0 SDK, Android Gradle Plugin 9.1.1,
+Gradle 9.3.1 and build-tools 36.0.0. Minimum API 34 and target API 35 are unchanged.
+The original APK signer is retained; no new production permissions were added.
+All 428,276 pure Java assertions pass. Assembly and lint pass with zero errors;
+lint reports one `UseRequiresApi` advisory for the isolated `@TargetApi(37)`
+helper. Independent source and compiled-bytecode review confirmed both creation
+paths and every relayout use `focusable=false` behind explicit API 37 checks.
+No AndroidX annotation dependency or hidden API workaround was added.
+
+API 37 software-emulator testing did **not** verify keyboard retention. The
+baseline service eventually started, but a trial failed before interaction because
+the keyboard was not visible within its readiness window. A justified warm retry
+then timed out before service readiness. Patched 0.21 installed and its service
+bound manually, but the final startup probe aborted with “System has crashed.”
+The captured system-server native stack was in task-snapshot/ImageReader graphics
+code; independent `screencap` also aborted in the emulator graphics backend.
+This is not an app keyboard test pass or an established app crash. No repeated
+API 37 trials are counted as successful. The emulator was stopped afterward.
+
+The same patched 0.21 APK passed actual API 35 service startup with an attached
+bubble, then hold/pan/release: active 2.5x, changed viewport center, and inactive
+1x after release. This exercises the older-platform branch and API37 class
+isolation; it does not validate API37 keyboard retention.
+
+The strengthened test fixture requires a focused editor and already-visible IME,
+confirms the controller actually receives input, checks focus/IME throughout the
+interaction, and verifies typing afterward. It never reopens the keyboard after
+controller input. Supplemental screenshots can be explicitly disabled when the
+emulator capture backend is broken, without disabling any functional assertions.
+Pixel verification is still required: with a keyboard already visible, test a
+controller tap, hold-and-pan, relocation, and interaction after rotation/unfolding;
+the keyboard should stay open and typing should remain in the original editor.
+
+
 ## 0.20 overlay startup and external magnification ownership
 
 Based on 0.19 commit `985e50389dcb8aeddafb6ca5e15f759c325dc08b`.

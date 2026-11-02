@@ -26,7 +26,7 @@ public final class MainActivity extends Activity {
         LinearLayout layout = new LinearLayout(this); layout.setOrientation(LinearLayout.VERTICAL);
         int p = (int)(24 * getResources().getDisplayMetrics().density); layout.setPadding(p,p,p,p);
         scroll.addView(layout); setContentView(scroll);
-        TextView title = new TextView(this); title.setText("Touch Zoom Controller\nPrototype 0.20"); title.setTextSize(28); layout.addView(title);
+        TextView title = new TextView(this); title.setText("Touch Zoom Controller\nPrototype 0.21"); title.setTextSize(28); layout.addView(title);
         status = new TextView(this); status.setTextSize(18); layout.addView(status);
         button(layout,"Retry controller startup",()->{if(ZoomService.current!=null){ZoomService.current.retryStartup();status.setText(ZoomService.current.controllerStatus());}});
         addSizeSettings(layout);

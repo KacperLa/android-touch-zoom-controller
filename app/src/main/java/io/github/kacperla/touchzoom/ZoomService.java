@@ -292,7 +292,7 @@ public final class ZoomService extends AccessibilityService implements DisplayMa
         attachAccessibilityOverlayToDisplay(Display.DEFAULT_DISPLAY,padControl);
         try {
             bubbleHost = new SurfaceControlViewHost(this, display, (IBinder)null);
-            bubbleHost.setView(bubble,diameter,diameter);bubblePackage=bubbleHost.getSurfacePackage();
+            setBubbleView();bubblePackage=bubbleHost.getSurfacePackage();
             finishOverlayStartup();
         }catch(RuntimeException denied){
             if(bubbleHost!=null){bubbleHost.release();bubbleHost=null;}
@@ -322,7 +322,7 @@ public final class ZoomService extends AccessibilityService implements DisplayMa
                 if(token==null){if(SystemClock.uptimeMillis()<deadline){handler.postDelayed(this,50);return;}
                     throw new IllegalStateException("Compatible input host did not attach");}
                 bubbleHost=new SurfaceControlViewHost(ZoomService.this,display,token);
-                bubbleHost.setView(bubble,diameter,diameter);bubblePackage=bubbleHost.getSurfacePackage();
+                setBubbleView();bubblePackage=bubbleHost.getSurfacePackage();
                 finishOverlayStartup();
             }catch(RuntimeException failure){failOverlayStartup(failure);}
         }});
@@ -361,6 +361,20 @@ public final class ZoomService extends AccessibilityService implements DisplayMa
         if(tokenHost!=null){try{wm.removeViewImmediate(tokenHost);}catch(RuntimeException ignored){}tokenHost=null;}
         if(pad!=null){pad.shutdown();pad=null;}
         else {if(padSurface!=null){padSurface.release();padSurface=null;}if(padControl!=null){padControl.release();padControl=null;}}
+    }
+    private void setBubbleView(){
+        if(Build.VERSION.SDK_INT>=37)Api37Host.setView(bubbleHost,bubble,diameter);
+        else bubbleHost.setView(bubble,diameter,diameter);
+    }
+    /** Isolate API37 types from older platform class loading; keep touch, never take key focus. */
+    @android.annotation.TargetApi(37)
+    private static final class Api37Host {
+        static void setView(SurfaceControlViewHost host,View view,int size){
+            host.setView(view,new SurfaceControlViewHost.LayoutParams(size,size,false));
+        }
+        static void relayout(SurfaceControlViewHost host,int size){
+            host.relayout(new SurfaceControlViewHost.LayoutParams(size,size,false));
+        }
     }
     private void transact(java.util.function.Consumer<SurfaceControl.Transaction> action) {
         try (SurfaceControl.Transaction transaction = new SurfaceControl.Transaction()) { action.accept(transaction); transaction.apply(); }
@@ -710,7 +724,10 @@ public final class ZoomService extends AccessibilityService implements DisplayMa
             && rotation==displays.getDisplay(Display.DEFAULT_DISPLAY).getRotation())return;
         cancelGesture(); density=nextDensity;
         diameter=Math.round(56*density); bubbleParams.width=diameter; bubbleParams.height=diameter; updateGeometry();
-        if(bubbleHost!=null)bubbleHost.relayout(diameter,diameter);
+        if(bubbleHost!=null){
+            if(Build.VERSION.SDK_INT>=37)Api37Host.relayout(bubbleHost,diameter);
+            else bubbleHost.relayout(diameter,diameter);
+        }
         if(padControl!=null){pad.invalidate();} }finally{probe.span("geometry callback duration",queryStart,SystemClock.uptimeMillis());}}
     @Override public void onConfigurationChanged(Configuration c) { super.onConfigurationChanged(c); geometryChanged(); }
     @Override public void onDisplayChanged(int id) { if(id==android.view.Display.DEFAULT_DISPLAY){if(probe.recording())sampleReportedRefresh();geometryChanged();} }

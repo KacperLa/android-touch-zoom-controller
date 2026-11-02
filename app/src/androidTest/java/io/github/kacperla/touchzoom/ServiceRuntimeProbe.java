@@ -39,7 +39,14 @@ public final class ServiceRuntimeProbe extends Instrumentation {
             if("startup".equals(scenario)){}
             else if("external".equals(scenario)||"window".equals(scenario))external(b,"window".equals(scenario));
             else if("hold".equals(scenario))hold(b);
-            else if("focus".equals(scenario))focus();
+            else if("focus".equals(scenario)||"focus-tap".equals(scenario))focusTrial("tap");
+            else if("focus-hold".equals(scenario))focusTrial("hold");
+            else if("focus-relocate".equals(scenario))focusTrial("relocate");
+            else if("focus-relayout".equals(scenario))focusTrial("relayout");
+            else if("focus-rotate".equals(scenario))focusTrial("rotate");
+            else if("focus-all".equals(scenario)){
+                for(String trial:new String[]{"tap","hold","relocate","relayout","rotate"})focusTrial(trial);
+            }
             else if("retry".equals(scenario))retry();
             else if("takeover".equals(scenario))takeover();
             else throw new IllegalArgumentException("Unknown scenario "+scenario);
@@ -133,37 +140,144 @@ public final class ServiceRuntimeProbe extends Instrumentation {
     private static Object privateField(Object target,String name)throws Exception{
         Field field=target.getClass().getDeclaredField(name);field.setAccessible(true);return field.get(target);
     }
-    private void focus()throws Exception{
+    private void focusTrial(String trial)throws Exception{
         onMain(()->{ZoomService.current.turnOff();return null;});
         android.accessibilityservice.AccessibilityServiceInfo info=ui.getServiceInfo();
         info.flags|=android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;
         ui.setServiceInfo(info);
-        shell("am start -n io.github.kacperla.touchzoom.test/io.github.kacperla.touchzoom.ProbeEditorActivity");
-        long editorDeadline=SystemClock.uptimeMillis()+30000;
-        while(!editorFocused()&&SystemClock.uptimeMillis()<editorDeadline)SystemClock.sleep(200);
-        require(editorFocused(),"test editor initially focused within 30s");boolean imeBefore=imeVisible();
-        log("EDITOR BEFORE focus=true ime="+imeBefore);Rect b=bubbleBounds();
-        event(MotionEvent.ACTION_DOWN,b.exactCenterX(),b.exactCenterY());
-        SystemClock.sleep(25);event(MotionEvent.ACTION_UP,lastX,lastY);SystemClock.sleep(700);
-        require(editorFocused(),"controller touch preserves editor focus");
-        ui.injectInputEvent(new android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN,android.view.KeyEvent.KEYCODE_A),true);
-        ui.injectInputEvent(new android.view.KeyEvent(android.view.KeyEvent.ACTION_UP,android.view.KeyEvent.KEYCODE_A),true);
-        SystemClock.sleep(300);
-        android.view.accessibility.AccessibilityNodeInfo root=ui.getRootInActiveWindow();
-        android.view.accessibility.AccessibilityNodeInfo focused=root==null?null:root.findFocus(android.view.accessibility.AccessibilityNodeInfo.FOCUS_INPUT);
-        require(focused!=null&&focused.getText()!=null&&focused.getText().toString().contains("a"),"editor receives hardware key after controller touch");
-        boolean imeAfter=imeVisible();log("EDITOR AFTER focus=true typed=a ime="+imeAfter);
-        require(!imeBefore||imeAfter,"visible IME remains visible");
+        // A fresh editor is allowed to open its IME BEFORE a trial, never after controller interaction.
+        shell("am start -f 0x10008000 -n io.github.kacperla.touchzoom.test/io.github.kacperla.touchzoom.ProbeEditorActivity");
+        waitVisibleEditor("before "+trial,30000);
+        assertHostNonFocusable("initial "+trial);
+        boolean rotated=false;
+        try{
+            if("relayout".equals(trial)){
+                onMain(()->{
+                    // Invalidate only our application's cached rotation to exercise its real relayout path.
+                    Field rotation=ZoomService.class.getDeclaredField("rotation");rotation.setAccessible(true);
+                    rotation.setInt(ZoomService.current,-1);
+                    java.lang.reflect.Method changed=ZoomService.class.getDeclaredMethod("geometryChanged");changed.setAccessible(true);
+                    changed.invoke(ZoomService.current);return null;
+                });
+                waitVisibleEditor("after forced service relayout",10000);
+                assertHostNonFocusable("after relayout");
+            }else if("rotate".equals(trial)){
+                require(ui.setRotation(UiAutomation.ROTATION_FREEZE_90),"freeze emulator rotation to landscape");rotated=true;
+                // Activity recreation may normally show the keyboard; it must be visibly open before touch.
+                waitVisibleEditor("after rotation",30000);
+                assertHostNonFocusable("after rotation");
+            }
+            // Keyboard avoidance may move the bubble; sample its position only after the IME settles.
+            SystemClock.sleep(350);assertVisibleEditor("immediately before "+trial);
+            Rect bubble=bubbleBounds();float x=bubble.exactCenterX(),y=bubble.exactCenterY();
+            log("VISIBLE-IME TRIAL "+trial+" bubble="+bubble+" BEFORE focus=true ime=true");
+            captureEditorPrecondition(trial);assertVisibleEditor("after precondition capture "+trial);
+            event(MotionEvent.ACTION_DOWN,x,y,!"relocate".equals(trial));
+            if("hold".equals(trial)){
+                long hold=onMain(()->(long)ActivationSettings.totalMs(ZoomService.current.getSharedPreferences("controller",0)
+                    .getInt(ActivationSettings.KEY,ActivationSettings.DEFAULT_MS)));
+                monitorVisibleEditor("held controller",hold+300);
+                MagnificationConfig engaged=state();require(engaged!=null&&engaged.isActivated()&&engaged.getScale()>1.01f,"hold trial actually zooms");
+                for(int i=1;i<=8;i++){event(MotionEvent.ACTION_MOVE,x-i*3,y-i*2);assertVisibleEditor("held pan "+i);SystemClock.sleep(20);}
+                log("VISIBLE-IME HOLD "+describe(state()));
+            }else if("relocate".equals(trial)){
+                // A single early deliberate MOVE chooses relocation before the hold timer.
+                event(MotionEvent.ACTION_MOVE,x-24,y-12);
+                require(onMain(()->(Boolean)privateField(ZoomService.current,"relocating")),"trial actually enters relocation");
+                assertVisibleEditor("relocation begins");
+                for(int i=2;i<=6;i++){event(MotionEvent.ACTION_MOVE,x-i*12,y-i*4);assertVisibleEditor("relocation "+i);SystemClock.sleep(20);}
+            }else{
+                require(onMain(()->(Boolean)privateField(ZoomService.current,"active")),"controller actually received DOWN for "+trial);
+                log("CONTROLLER DOWN received "+trial+" elapsed="+(SystemClock.uptimeMillis()-down)+"ms");
+                SystemClock.sleep(25);
+            }
+            event(MotionEvent.ACTION_UP,lastX,lastY);
+            // Do not call showSoftInput/relaunch/requestFocus here: dismissal must remain a failure.
+            monitorVisibleEditor("after "+trial,1200);
+            assertHostNonFocusable("after "+trial+" interaction");
+            typeAndVerifyEditor();assertVisibleEditor("after typing "+trial);
+            log("VISIBLE-IME TRIAL "+trial+" AFTER focus=true ime=true typed=a");
+        }finally{
+            if(fingerDown){event(MotionEvent.ACTION_CANCEL,lastX,lastY);}
+            if(rotated)ui.setRotation(UiAutomation.ROTATION_UNFREEZE);
+        }
     }
-    private boolean editorFocused(){
-        android.view.accessibility.AccessibilityNodeInfo root=ui.getRootInActiveWindow();
-        android.view.accessibility.AccessibilityNodeInfo focused=root==null?null:root.findFocus(android.view.accessibility.AccessibilityNodeInfo.FOCUS_INPUT);
-        return focused!=null&&"android.widget.EditText".contentEquals(focused.getClassName())
-            &&"io.github.kacperla.touchzoom.test".contentEquals(focused.getPackageName());
+    private void captureEditorPrecondition(String trial)throws Exception{
+        for(android.view.accessibility.AccessibilityWindowInfo window:ui.getWindows()){
+            if(window.getType()==android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD){
+                Rect bounds=new Rect();window.getBoundsInScreen(bounds);log("IME PRECONDITION BOUNDS "+trial+" "+bounds);
+            }
+        }
+        if(Boolean.parseBoolean(args.getString("skipScreenshot","false"))){
+            log("IME PRECONDITION SCREENSHOT explicitly disabled; IME bounds/focus assertions remain required");return;
+        }
+        android.graphics.Bitmap screenshot=ui.takeScreenshot();
+        if(screenshot==null){log("IME PRECONDITION SCREENSHOT unavailable "+trial);return;}
+        java.io.File file=new java.io.File(getTargetContext().getFilesDir(),"ime-before-"+trial+".png");
+        try(java.io.FileOutputStream out=new java.io.FileOutputStream(file)){
+            require(screenshot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,out),"precondition screenshot encoded");
+        }finally{screenshot.recycle();}
+        log("IME PRECONDITION SCREENSHOT "+file.getAbsolutePath()+" (fixed test editor only)");
+    }
+    private void waitVisibleEditor(String phase,long timeout)throws Exception{
+        long deadline=SystemClock.uptimeMillis()+timeout;
+        while(SystemClock.uptimeMillis()<deadline){
+            if(editorFocused()&&imeVisible()){
+                SystemClock.sleep(150);
+                if(editorFocused()&&imeVisible()){log("EDITOR READY "+phase+" focus=true ime=true");return;}
+            }
+            SystemClock.sleep(100);
+        }
+        throw new AssertionError(phase+": visible keyboard AND focused test editor required (focus="+editorFocused()+", ime="+imeVisible()+")");
+    }
+    private void assertVisibleEditor(String phase){
+        boolean focus=editorFocused(),ime=imeVisible();
+        if(!focus||!ime)log("EDITOR FAILURE "+phase+" focus="+focus+" ime="+ime);
+        require(focus,phase+": test editor retains input focus");
+        require(ime,phase+": keyboard remains visibly open");
+    }
+    private void monitorVisibleEditor(String phase,long duration){
+        long until=SystemClock.uptimeMillis()+duration;
+        do{assertVisibleEditor(phase);SystemClock.sleep(50);}while(SystemClock.uptimeMillis()<until);
+    }
+    private void typeAndVerifyEditor(){
+        android.view.accessibility.AccessibilityNodeInfo before=focusedEditor();
+        String old=before==null||before.getText()==null?"":before.getText().toString();
+        require(ui.injectInputEvent(new android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN,android.view.KeyEvent.KEYCODE_A),true),"hardware a down injected");
+        require(ui.injectInputEvent(new android.view.KeyEvent(android.view.KeyEvent.ACTION_UP,android.view.KeyEvent.KEYCODE_A),true),"hardware a up injected");
+        SystemClock.sleep(200);
+        android.view.accessibility.AccessibilityNodeInfo focused=focusedEditor();
+        require(focused!=null&&focused.getText()!=null&&focused.getText().length()>old.length()
+            &&focused.getText().toString().endsWith("a"),"editor receives new hardware key after controller interaction");
+    }
+    private void assertHostNonFocusable(String phase)throws Exception{
+        if(android.os.Build.VERSION.SDK_INT>=37){
+            boolean focusable=onMain(()->Api37Probe.isFocusable((android.view.SurfaceControlViewHost)privateField(ZoomService.current,"bubbleHost")));
+            String expectation=args.getString("expectNonFocusable");
+            boolean expect=expectation==null?getTargetContext().getPackageManager().getPackageInfo(getTargetContext().getPackageName(),0).getLongVersionCode()>=21:Boolean.parseBoolean(expectation);
+            log("HOST PARAMS "+phase+" focusable="+focusable+" expectNonFocusable="+expect+" (public API37)");
+            if(expect)require(!focusable,phase+": API37 hosted root is explicitly nonfocusable");
+        }
+    }
+    @android.annotation.TargetApi(37)
+    private static final class Api37Probe {
+        static boolean isFocusable(android.view.SurfaceControlViewHost host){return host.getLayoutParams().isFocusable();}
+    }
+    private boolean editorFocused(){return focusedEditor()!=null;}
+    private android.view.accessibility.AccessibilityNodeInfo focusedEditor(){
+        // Active/touched window can be the overlay during a gesture; test actual INPUT-focused window.
+        for(android.view.accessibility.AccessibilityWindowInfo window:ui.getWindows()){
+            if(!window.isFocused())continue;
+            android.view.accessibility.AccessibilityNodeInfo root=window.getRoot();
+            android.view.accessibility.AccessibilityNodeInfo focused=root==null?null:root.findFocus(android.view.accessibility.AccessibilityNodeInfo.FOCUS_INPUT);
+            if(focused!=null&&"android.widget.EditText".contentEquals(focused.getClassName())
+                &&"io.github.kacperla.touchzoom.test".contentEquals(focused.getPackageName()))return focused;
+        }
+        return null;
     }
     private boolean imeVisible(){
         for(android.view.accessibility.AccessibilityWindowInfo w:ui.getWindows())
-            if(w.getType()==android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD)return true;
+            if(w.getType()==android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD){Rect bounds=new Rect();w.getBoundsInScreen(bounds);if(!bounds.isEmpty())return true;}
         return false;
     }
     private void waitService(long timeout)throws Exception{
@@ -189,10 +303,11 @@ public final class ServiceRuntimeProbe extends Instrumentation {
         return new Rect(params.x,params.y,params.x+v.getWidth(),params.y+v.getHeight());
     });}
     private MagnificationConfig state()throws Exception{return onMain(()->ZoomService.current.getMagnificationController().getMagnificationConfig());}
-    private void event(int action,float x,float y){
+    private void event(int action,float x,float y){event(action,x,y,true);}
+    private void event(int action,float x,float y,boolean synchronous){
         long now=SystemClock.uptimeMillis();if(action==MotionEvent.ACTION_DOWN){down=now;fingerDown=true;}
         MotionEvent e=MotionEvent.obtain(down,now,action,x,y,0);e.setSource(InputDevice.SOURCE_TOUCHSCREEN);
-        try{require(ui.injectInputEvent(e,true),"input injection action="+action);}finally{e.recycle();}
+        try{require(ui.injectInputEvent(e,synchronous),"input injection action="+action);}finally{e.recycle();}
         lastX=x;lastY=y;if(action==MotionEvent.ACTION_UP||action==MotionEvent.ACTION_CANCEL)fingerDown=false;
     }
     interface Checked<T>{T get()throws Exception;}
@@ -206,7 +321,7 @@ public final class ServiceRuntimeProbe extends Instrumentation {
             in.transferTo(out);return out.toString(java.nio.charset.StandardCharsets.UTF_8);
         }
     }
-    private void log(String text){report.append(SystemClock.uptimeMillis()).append(" ").append(text).append('\n');}
+    private void log(String text){report.append(SystemClock.uptimeMillis()).append(" ").append(text).append('\n');android.util.Log.i("TouchZoomProbe",text);}
     private static void require(boolean value,String reason){if(!value)throw new AssertionError(reason);}
     private static String describe(MagnificationConfig c){return c==null?"null":"active="+c.isActivated()+" mode="+c.getMode()+" scale="+c.getScale()+" center="+c.getCenterX()+","+c.getCenterY();}
 }

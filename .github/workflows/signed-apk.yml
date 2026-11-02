@@ -19,10 +19,10 @@ jobs:
           java-version: '17'
       - uses: gradle/actions/setup-gradle@017a9effdb900e5b5b2fddfb590a105619dca3c3 # v4.4.2
         with:
-          gradle-version: '8.13'
+          gradle-version: '9.3.1'
           cache-disabled: true
       - run: |
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0'
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-37.0' 'build-tools;36.0.0'
       - run: bash scripts/test.sh
       - run: gradle --no-daemon --no-build-cache :app:assembleRelease :app:lintRelease
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

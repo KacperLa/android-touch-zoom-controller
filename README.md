@@ -105,9 +105,9 @@ without the user selecting the relevant control. Review diagnostic text before s
 Requirements:
 
 - JDK 17 or newer (the project targets Java 17)
-- Gradle 8.13
-- Android SDK platform 35 and build-tools 35
-- Android Gradle Plugin 8.9.2, fetched by Gradle
+- Gradle 9.3.1
+- Android SDK platform 37.0 and build-tools 36.0.0
+- Android Gradle Plugin 9.1.1, fetched by Gradle
 
 Set `ANDROID_HOME` or create a local `local.properties` pointing to your SDK. Then:
 
@@ -253,3 +253,14 @@ check actual overlay startup, hold/pan/release, external fullscreen/window state
 mid-gesture takeover, startup failure/retry, and editor focus/IME. Run only on a
 dedicated emulator: the runner changes enabled accessibility services there.
 Software-emulator timings are not physical-device latency/FPS measurements.
+
+## 0.21: keep keyboard focus in the underlying app on Android 17
+
+On API 37 and newer, the embedded controller now explicitly uses the public
+nonfocusable `SurfaceControlViewHost.LayoutParams` for initial attachment and
+all relayouts. It remains touchable but does not request key input focus. This is
+not a keyboard-reopen workaround and adds no permissions. The previous Android
+14–16 host/fallback path is unchanged; this change does not claim to solve every
+older-platform keyboard interaction. Compilation uses SDK 37; minimum API 34
+and target API 35 remain unchanged. Zoom gestures, rendering and ownership guards
+are unchanged from 0.20. See VALIDATION.md for actual runtime coverage.

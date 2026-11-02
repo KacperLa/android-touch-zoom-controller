@@ -19,11 +19,11 @@ jobs:
           java-version: '17'
       - uses: gradle/actions/setup-gradle@017a9effdb900e5b5b2fddfb590a105619dca3c3 # v4.4.2
         with:
-          gradle-version: '8.13'
+          gradle-version: '9.3.1'
           cache-disabled: true
       - name: Install Android SDK packages
         run: |
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0'
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-37.0' 'build-tools;36.0.0'
       - name: Helper tests
         run: bash scripts/test.sh
       - name: Build unsigned APK and lint

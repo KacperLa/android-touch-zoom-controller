@@ -5,14 +5,14 @@ plugins { id 'com.android.application' }
 def retainedKey = System.getenv('TOUCH_ZOOM_KEYSTORE')
 android {
     namespace 'io.github.kacperla.touchzoom'
-    compileSdk 35
+    compileSdk { version = release(37) { minorApiLevel = 0 } }
     defaultConfig {
         applicationId 'io.github.kacperla.touchzoom'
         minSdk 34
         targetSdk 35
         testInstrumentationRunner 'io.github.kacperla.touchzoom.ServiceRuntimeProbe'
-        versionCode 20
-        versionName '0.20-overlay-ownership'
+        versionCode 21
+        versionName '0.21-keyboard-focus'
     }
     if (retainedKey != null && !retainedKey.isBlank()) {
         signingConfigs {

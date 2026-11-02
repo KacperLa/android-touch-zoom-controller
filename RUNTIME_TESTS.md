@@ -28,3 +28,24 @@ quote removal, so the runner's fixed service-component values are deliberately
 unquoted. On failure, startup diagnostics include app status and its main-thread
 stack, not screen contents. Software-emulator timing is not Pixel latency/FPS
 validation. See VALIDATION.md for actual results and remaining coverage.
+
+## 0.21 already-visible keyboard checks
+
+On API 37, run `focus-tap`, `focus-hold`, `focus-relocate`, `focus-relayout`, and
+`focus-rotate` separately with the same clean-disable preamble. `focus-all` runs
+all five with a fresh editor for each. Every trial requires both a focused test
+editor and an already-visible IME before controller input. Missing keyboard is a
+failure, not a skipped/pass condition. The fixture never reopens the keyboard
+after controller input; it checks continued editor focus, IME presence and new
+hardware-key text. Relayout uses the actual service geometry-change path; rotation
+uses the emulator's public rotation control and waits for the editor/IME again.
+
+The runner logs the public API 37 hosted-window focusability. Version 21 requires
+`false`; baseline version 20 merely logs it so the actual keyboard symptom can be
+observed. `-e expectNonFocusable true|false` explicitly overrides that expectation.
+The older-platform startup/hold tests still exercise the unchanged fallback.
+
+If an emulator's graphics-capture backend crashes independently of the app,
+`-e skipScreenshot true` omits only the supplementary precondition PNG. It logs
+that omission and retains every IME-bounds, focused-editor, touch-receipt and typing
+assertion. Do not report visual screenshot verification when using this option.
