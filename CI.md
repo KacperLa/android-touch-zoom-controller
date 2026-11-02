@@ -25,6 +25,27 @@ workflow that is allowed to use that secret; trusted workflow changes remain vit
 
 ## Required setup (not performed by committing these files)
 
+### Optional local setup helper
+
+With the original keystore already on your own trusted computer, JDK `keytool`,
+Python 3, and `gh` securely authenticated as **KacperLa**, run:
+
+```sh
+bash scripts/setup-signing.sh /private/path/original.jks
+```
+
+This helper targets only this repository. It creates `signing` with a main-only
+branch policy if absent; if an existing environment permits anything else, it
+stops without weakening that policy. It asks before secret upload, reads passwords
+without echoing, verifies the original certificate, and streams the four values
+into GitHub CLI encryption without storing a base64/password file. It never adds
+keys to Git. It does **not** add a required reviewer or protect `main`; configure
+those in Settings. Do not run it under a terminal recorder or shell tracing.
+If an upload fails partway through, rerun to replace all four values consistently.
+Seven mocked success/failure scenarios passed; real secret upload remains untested.
+
+### Manual alternative and protection checklist
+
 1. Create the GitHub Actions environment **`signing`** in repository Settings →
    Environments. Restrict its deployment branches/tags to the branch **`main` only**
    (no tags). Add required review by the owner where supported. Protect `main` and
