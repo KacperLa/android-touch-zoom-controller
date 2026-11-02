@@ -571,7 +571,6 @@ public final class ZoomService extends AccessibilityService implements DisplayMa
         super.onDestroy();
     }
     private final class Bubble extends View {
-        final Path arrow=new Path();
         final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
         Bubble(){super(ZoomService.this);setClickable(true);setContentDescription("Touch zoom: tap to toggle persistent zoom; drag immediately to reposition; hold then drag to pan; double tap and drag to adjust scale");}
         @Override public boolean performClick(){super.performClick();if(!active){reconcileIdleLatch();cancelGesture();toggleLatch();}setAlpha(1);handler.removeCallbacks(fade);handler.postDelayed(fade,1800);return true;}
@@ -580,15 +579,19 @@ public final class ZoomService extends AccessibilityService implements DisplayMa
             // The expanded rectangular pad is a separate surface and remains visible.
             if(!bubbleAppearance.shouldDrawArtwork(active && momentary.ownsPreview(),relocating))return;
             float r=getWidth()/2f;
-            paint.setStyle(Paint.Style.FILL);paint.setColor(Color.rgb(115,119,125));
+            // Original Orbit artwork: a high-contrast C-shaped ring and thumb-point dot.
+            // The two-tone perimeter remains visible on both light and dark content.
+            paint.setStyle(Paint.Style.FILL);paint.setColor(Color.rgb(38,38,38));
             c.drawCircle(r,r,r-2*density,paint);
+            paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(2*density);paint.setColor(Color.BLACK);
+            c.drawCircle(r,r,r-density,paint);
             paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(2*density);paint.setColor(Color.WHITE);
             c.drawCircle(r,r,r-3*density,paint);
-            paint.setStyle(Paint.Style.FILL);c.drawCircle(r,r,r*.24f,paint);
-            arrow.reset();arrow.moveTo(0,-r*.79f);arrow.lineTo(-r*.14f,-r*.55f);arrow.lineTo(r*.14f,-r*.55f);arrow.close();
-            c.save();c.translate(r,r);
-            for(int direction=0;direction<4;direction++){c.drawPath(arrow,paint);c.rotate(90);}
-            c.restore();
+            paint.setStrokeCap(Paint.Cap.BUTT);paint.setStrokeWidth(r*OrbitArtwork.RING_STROKE);
+            float orbit=r*OrbitArtwork.RING_RADIUS;
+            c.drawArc(r-orbit,r-orbit,r+orbit,r+orbit,
+                    OrbitArtwork.START_DEGREES,OrbitArtwork.SWEEP_DEGREES,false,paint);
+            paint.setStyle(Paint.Style.FILL);c.drawCircle(r,r,r*OrbitArtwork.DOT_RADIUS,paint);
         }
         @Override public boolean onTouchEvent(MotionEvent e){
             long arrival=(probe.capturePending() || diagnostic.mayRecord())?SystemClock.uptimeMillis():0;

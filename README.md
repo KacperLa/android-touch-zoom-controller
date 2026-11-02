@@ -5,13 +5,13 @@ A floating touch controller for Android's full-screen system magnifier, inspired
 The controller stays outside the magnified content and provides a compact touchpad
 for panning around the screen.
 
-**Prototype version 0.15. Android 14 / API 34 or newer is required, but compatibility
+**Prototype version 0.16. Android 14 / API 34 or newer is required, but compatibility
 varies by device and Android build.** This is not a Play Store release.
 
 ## Controls
 
 - **Drag immediately:** move the controller. It grows to 150% while relocating,
-  keeps its gray/white colors, and returns to normal on release.
+  keeps its charcoal/white colors, and returns to normal on release.
 - **Hold, then drag:** activate magnification and pan. Release to zoom out, unless
   persistent zoom was already enabled.
 - **Quick tap:** toggle persistent zoom. The toggle waits for the double-tap
@@ -32,6 +32,11 @@ Floating keyboards may not report a usable height. Rotation, folding, multitouch
 and settings changes cancel active gestures.
 
 ## Settings
+
+The floating controller uses original Orbit artwork: a white C-shaped ring and
+central dot on charcoal, with a black/white perimeter for light and dark content.
+This distinguishes it from Android's magnifying-glass accessibility shortcut.
+The launcher icon is unchanged.
 
 - Touchpad longer edge: **80–360 dp**, default **180 dp**, with preview/reset.
 - Extra hold delay: **0–2000 ms**, in addition to a **100 ms** recognition pause.
