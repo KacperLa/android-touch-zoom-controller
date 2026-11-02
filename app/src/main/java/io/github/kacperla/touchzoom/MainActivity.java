@@ -10,6 +10,12 @@ import android.widget.*;
 
 public final class MainActivity extends Activity {
     private TextView status, sizeValue;
+    private final Runnable refreshStatus=new Runnable(){public void run(){
+        if(status==null)return;
+        String message=ZoomService.current==null?"Service is off. Enable Touch Zoom Controller in accessibility settings.":ZoomService.current.controllerStatus();
+        if(!android.text.TextUtils.equals(status.getText(),message))status.setText(message);
+        status.postDelayed(this,500);
+    }};
     private SeekBar sizeSlider, delaySlider, opacitySlider;
     private TextView delayValue, opacityValue;
     private SharedPreferences preferences;
@@ -20,8 +26,9 @@ public final class MainActivity extends Activity {
         LinearLayout layout = new LinearLayout(this); layout.setOrientation(LinearLayout.VERTICAL);
         int p = (int)(24 * getResources().getDisplayMetrics().density); layout.setPadding(p,p,p,p);
         scroll.addView(layout); setContentView(scroll);
-        TextView title = new TextView(this); title.setText("Touch Zoom Controller\nPrototype 0.19"); title.setTextSize(28); layout.addView(title);
+        TextView title = new TextView(this); title.setText("Touch Zoom Controller\nPrototype 0.20"); title.setTextSize(28); layout.addView(title);
         status = new TextView(this); status.setTextSize(18); layout.addView(status);
+        button(layout,"Retry controller startup",()->{if(ZoomService.current!=null){ZoomService.current.retryStartup();status.setText(ZoomService.current.controllerStatus());}});
         addSizeSettings(layout);
         addDelaySettings(layout);
         addOpacitySettings(layout);
@@ -44,7 +51,7 @@ public final class MainActivity extends Activity {
             dialog.show();
         });
         button(layout,"Open accessibility settings", () -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
-        button(layout,"Turn magnification off", () -> { if (ZoomService.current != null) ZoomService.current.turnOff(); });
+        button(layout,"Turn full-screen magnification off", () -> { if (ZoomService.current != null) ZoomService.current.turnOff(); });
         button(layout,"Disable controller service", () -> { if (ZoomService.current != null) ZoomService.current.disableSelf(); });
     }
     private void addSizeSettings(LinearLayout layout) {
@@ -138,5 +145,6 @@ public final class MainActivity extends Activity {
         }
     }
     private void button(LinearLayout layout, String text, Runnable action) { Button b = new Button(this); b.setText(text); b.setOnClickListener(v -> action.run()); layout.addView(b); }
-    @Override protected void onResume() { super.onResume(); status.setText(ZoomService.current == null ? "Service is off. Enable Touch Zoom Controller in accessibility settings." : "Service connected. The floating circle is available."); }
+    @Override protected void onResume(){super.onResume();status.removeCallbacks(refreshStatus);status.post(refreshStatus);}
+    @Override protected void onPause(){status.removeCallbacks(refreshStatus);super.onPause();}
 }

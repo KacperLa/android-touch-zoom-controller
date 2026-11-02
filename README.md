@@ -217,3 +217,39 @@ one-unconfirmed-scale guard. Returning to1x after zooming still sends a real upd
 0.18 mode-flip and release-latch behavior are preserved; no animation or pan cap
 was added. This addresses the measured initial app-side gate, not the separate
 Bluetooth mouse/input-delivery issue.
+
+## 0.20: compatible overlay startup and conservative magnification ownership
+
+The existing display-attached, unmagnified controller path remains the first
+choice. When Android rejects a null embedded-host token with the known
+`INTERNAL_SYSTEM_WINDOW` error, the service creates its own transparent,
+non-touchable accessibility host and obtains a public host token. It does not
+request privileged permission. Partial startup failure now cleans up resources,
+reports an actionable status in the app, and offers **Retry controller startup**.
+Retry invalidates earlier initialization callbacks and old renderer cleanup owns
+only old surfaces. The fallback is subject to the runtime validation recorded below;
+parent nonfocusable flags are not proof that every embedded-window focus behavior
+is identical across Android versions.
+
+Pre-existing fullscreen zoom stays enabled after ordinary pan/release/cancel.
+Intentional panning changes its center; the controller never restores an old
+center/scale snapshot afterward. Active **window magnification is left unchanged**:
+use fullscreen mode to operate this controller. Unexpected mode/activation/scale
+changes cancel pending work without resetting the other magnification. Cleanup
+resets app-owned zoom only when a fresh configuration still matches its latest
+requested fullscreen scale. Explicit user off remains distinct from cleanup.
+
+Public Android callbacks do not include owner/request IDs. Identical-state
+handoffs and center-only changes cannot be reliably attributed; bounded recent
+scale acknowledgments are tolerated to avoid treating delayed own callbacks as
+foreign writes. This is conservative coexistence, not a guarantee of arbitration
+between arbitrary simultaneous accessibility services.
+
+### Emulator-only Android service tests
+
+`app/src/androidTest` contains a dependency-free instrumentation runner and a
+separate test-only magnifier service. Neither ships in the normal APK. It can
+check actual overlay startup, hold/pan/release, external fullscreen/window state,
+mid-gesture takeover, startup failure/retry, and editor focus/IME. Run only on a
+dedicated emulator: the runner changes enabled accessibility services there.
+Software-emulator timings are not physical-device latency/FPS measurements.

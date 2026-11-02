@@ -10,8 +10,9 @@ android {
         applicationId 'io.github.kacperla.touchzoom'
         minSdk 34
         targetSdk 35
-        versionCode 19
-        versionName '0.19-noop-scale-entry'
+        testInstrumentationRunner 'io.github.kacperla.touchzoom.ServiceRuntimeProbe'
+        versionCode 20
+        versionName '0.20-overlay-ownership'
     }
     if (retainedKey != null && !retainedKey.isBlank()) {
         signingConfigs {

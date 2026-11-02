@@ -1,5 +1,49 @@
 # Validation and compatibility
 
+## 0.20 overlay startup and external magnification ownership
+
+Based on 0.19 commit `985e50389dcb8aeddafb6ca5e15f759c325dc08b`.
+Pure Java regression checks passed 428,276 assertions, including 10,046 ownership
+checks. Android debug assembly, test-APK assembly, and Android lint passed.
+The normal APK adds no requested permissions. Independent source review covered
+startup generation invalidation, partial cleanup, renderer resource ownership,
+and external magnification transitions. Helper tests are not Android runtime tests.
+
+Actual service tests ran on a dedicated Android 15 / API 35 AOSP x86_64 emulator
+with software CPU acceleration and SwiftShader (no KVM), two cores and 2 GiB RAM.
+After slow framework startup/recovery, display geometry was reduced to 480x800 at
+160 dpi and system animation scales were disabled. These conditions validate
+functionality, not Pixel smoothness, timing, or refresh rate.
+
+- Baseline 0.19 reproduced the null-host `INTERNAL_SYSTEM_WINDOW` startup crash.
+- Patched 0.20 enabled and bound the real accessibility service; its bubble appeared.
+- Injected hold, move and release activated magnification, changed viewport center,
+  and returned to inactive 1x on release.
+- A separate test service's 2.5x fullscreen zoom survived controller release/cancel.
+- External scale takeover and external off canceled the controller gesture;
+  subsequent stale move/release did not restore the controller's old state.
+- A separate test service's active window magnification retained mode, scale and
+  center across controller release/cancel.
+- The empty editor retained input focus after a controller tap and received a
+  hardware key. The IME was not yet visible before that gesture (visible afterward),
+  so this run does not establish preservation of an already-visible keyboard.
+- Two forced local startup failures followed by retry stopped old renderer threads,
+  retained the new surface, and permitted another successful hold/pan/release.
+
+Initial harness failures (literal shell quotes and a fixed two-second editor launch
+wait) were corrected; they are not counted as production failures. The emulator's
+initial framework restart and ANRs predated these tests. The test APK and its
+independent magnifier/editor are not included in the normal app APK.
+
+Remaining checks on a physical Pixel: service disable/re-enable, normal hold and
+sticky/double-tap gestures, keyboard/fold transitions, and coexistence with zoom
+enabled outside this app. Public callbacks do not identify the owning service;
+identical scale/mode handoffs and center-only changes cannot be reliably attributed.
+Active window magnification is intentionally not controlled by this fullscreen app.
+This does not claim to fix the separate Bluetooth-mouse input delay or all focus
+behavior across Android versions. See `RUNTIME_TESTS.md` for dedicated-emulator steps.
+
+
 ## Existing 0.15 application baseline
 
 The application sources in this repository come from the 0.15 source archive.
