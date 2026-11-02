@@ -181,3 +181,39 @@ Pull requests run tests, lint, and an unsigned release build without signing sec
 A separate manual workflow can sign a trusted `main` build with the original key.
 See [CI.md](CI.md) for the required protected environment and encrypted secrets setup,
 artifact visibility, certificate verification, and current validation limits.
+
+## 0.18: double-tap drag starts at actual zoom and stays zoomed
+
+Based directly on preserved0.16, with the0.17 animation experiment removed
+(including its setting). A double-tap drag while unzoomed starts at1x, even when
+ordinary hold-to-pan remembers2x or another scale. When already zoomed, adjustment
+starts from current actual scale. Drag upward to increase zoom; normal release
+keeps the selected zoom latched and remembers that selection. A later quick tap
+turns it off. Dragging back to1x releases zoom rather than leaving an invisible latch.
+
+Release drops queued intermediate updates, cancels the gesture's scale gate and
+callbacks, then commits one latest selected scale. Cancel/multitouch/interruption
+never creates a new latch. Ordinary hold-to-pan remains momentary; quick taps,
+relocation and the Orbit C-dot artwork/150% drag enlargement/haptics are unchanged.
+This is not a Bluetooth mouse compatibility fix. Existing local preference data
+for the removed experiment is ignored; no extra animation callbacks run.
+
+Already zoomed reverses the ordinary controller gesture: drag immediately to pan;
+hold stationary, then drag to relocate the bubble while keeping zoom. The zoom
+state is captured at DOWN and the first deliberate movement/hold locks the mode;
+a later timer cannot change a pan into relocation. Double-tap scale adjustment
+has precedence. Single tap still turns zoom off. Cancel/release of a pan over
+externally enabled zoom does not disable that external zoom.
+
+## 0.19: no acknowledgment wait for an unzoomed1x start
+
+A second-tap gesture beginning at1x now starts logically without sending a
+redundant system enable request. Android can accept that unchanged1x request
+without reporting a scale change; waiting on that report previously delayed the
+first real zoom update until the one-second fallback. Downward moves that remain
+at1x are likewise skipped until a real zoom update has been sent. The first
+upward scale change is sent on the next normal display frame, using the existing
+one-unconfirmed-scale guard. Returning to1x after zooming still sends a real update.
+0.18 mode-flip and release-latch behavior are preserved; no animation or pan cap
+was added. This addresses the measured initial app-side gate, not the separate
+Bluetooth mouse/input-delivery issue.
