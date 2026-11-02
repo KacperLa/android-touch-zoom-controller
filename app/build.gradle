@@ -10,8 +10,8 @@ android {
         applicationId 'io.github.kacperla.touchzoom'
         minSdk 34
         targetSdk 35
-        versionCode 18
-        versionName '0.18-doubletap-latch'
+        versionCode 19
+        versionName '0.19-noop-scale-entry'
     }
     if (retainedKey != null && !retainedKey.isBlank()) {
         signingConfigs {

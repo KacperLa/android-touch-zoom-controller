@@ -188,7 +188,9 @@ public final class ZoomService extends AccessibilityService implements DisplayMa
         momentary.select(targetScale);
         zoomHaptics.requestEngage(isReportedZoomed());
         probe.mark("activation call start",SystemClock.uptimeMillis(),-1);
-        apply(targetScale,hasPending ? pendingX : initialCenterX,hasPending ? pendingY : initialCenterY,false);
+        if(!zoomGesture || doubleTapScale.shouldWrite(targetScale))
+            apply(targetScale,hasPending ? pendingX : initialCenterX,hasPending ? pendingY : initialCenterY,false);
+        else trace("second-tap1x logical entry: no system request or acknowledgment needed");
         probe.mark("activation call end",SystemClock.uptimeMillis(),-1);
         hasPending=false;
         // No synchronous read-back or canvas lock between activation and the next input event.
@@ -209,7 +211,7 @@ public final class ZoomService extends AccessibilityService implements DisplayMa
             // Marker submission is independent of duplicate suppression and precedes Binder work.
             if(pad!=null && pad.visible)pad.invalidate();
             if(pacer.changed(pendingScale,pendingX,pendingY)){
-                if(zoomGesture)apply(pendingScale,pendingX,pendingY,false);
+                if(zoomGesture){if(doubleTapScale.shouldWrite(pendingScale))apply(pendingScale,pendingX,pendingY,false);}
                 else applyCenter(pendingX,pendingY);
             }
         }
@@ -374,7 +376,7 @@ public final class ZoomService extends AccessibilityService implements DisplayMa
     private boolean apply(float scale,float x,float y,boolean animate) {
         if(diagnosticEnabled())trace("request t="+SystemClock.uptimeMillis()+" ON scale="+scale+" cx="+x+" cy="+y);
         boolean gated=active && zoomGesture;
-        if(gated)scaleGate.sent(scale);
+        if(gated){doubleTapScale.wrote();scaleGate.sent(scale);}
         long controlStart=SystemClock.uptimeMillis();
         boolean ok = magnifier.setMagnificationConfig(new MagnificationConfig.Builder()
             .setMode(MagnificationConfig.MAGNIFICATION_MODE_FULLSCREEN).setActivated(true).setScale(scale).setCenterX(x).setCenterY(y).build(),animate);

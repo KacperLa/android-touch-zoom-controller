@@ -204,3 +204,16 @@ state is captured at DOWN and the first deliberate movement/hold locks the mode;
 a later timer cannot change a pan into relocation. Double-tap scale adjustment
 has precedence. Single tap still turns zoom off. Cancel/release of a pan over
 externally enabled zoom does not disable that external zoom.
+
+## 0.19: no acknowledgment wait for an unzoomed1x start
+
+A second-tap gesture beginning at1x now starts logically without sending a
+redundant system enable request. Android can accept that unchanged1x request
+without reporting a scale change; waiting on that report previously delayed the
+first real zoom update until the one-second fallback. Downward moves that remain
+at1x are likewise skipped until a real zoom update has been sent. The first
+upward scale change is sent on the next normal display frame, using the existing
+one-unconfirmed-scale guard. Returning to1x after zooming still sends a real update.
+0.18 mode-flip and release-latch behavior are preserved; no animation or pan cap
+was added. This addresses the measured initial app-side gate, not the separate
+Bluetooth mouse/input-delivery issue.
