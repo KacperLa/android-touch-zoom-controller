@@ -1,0 +1,44 @@
+plugins { id 'com.android.application' }
+
+// Normal development builds use the Android Gradle plugin's local debug key.
+// Existing distributed APKs require their original private key for in-place updates.
+def retainedKey = System.getenv('TOUCH_ZOOM_KEYSTORE')
+android {
+    namespace 'io.github.kacperla.touchzoom'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'io.github.kacperla.touchzoom'
+        minSdk 34
+        targetSdk 35
+        versionCode 15
+        versionName '0.15-buffered-input'
+    }
+    if (retainedKey != null && !retainedKey.isBlank()) {
+        signingConfigs {
+            debug {
+                storeFile file(retainedKey)
+                storePassword System.getenv('TOUCH_ZOOM_STORE_PASSWORD')
+                keyAlias System.getenv('TOUCH_ZOOM_KEY_ALIAS')
+                keyPassword System.getenv('TOUCH_ZOOM_KEY_PASSWORD')
+            }
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+// An explicitly selected private key must never silently fall back to another key.
+tasks.configureEach { task ->
+    if (task.name == 'validateSigningDebug' && retainedKey != null && !retainedKey.isBlank()) {
+        task.doFirst {
+            if (!file(retainedKey).isFile()) {
+                throw new GradleException('TOUCH_ZOOM_KEYSTORE must point to an existing private keystore.')
+            }
+            ['TOUCH_ZOOM_STORE_PASSWORD', 'TOUCH_ZOOM_KEY_ALIAS', 'TOUCH_ZOOM_KEY_PASSWORD'].each { name ->
+                if (!System.getenv(name)) throw new GradleException('Set ' + name + ' for the selected private keystore.')
+            }
+        }
+    }
+}

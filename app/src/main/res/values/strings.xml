@@ -1,0 +1,1 @@
+<resources><string name="service_description">A floating touchpad for controlling full-screen magnification. It does not read screen content, capture screenshots, inject clicks, or access the internet. Enable only if you want this prototype to control screen magnification.</string></resources>

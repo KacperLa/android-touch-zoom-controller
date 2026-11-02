@@ -1,0 +1,4 @@
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+ android:description="@string/service_description" android:settingsActivity="io.github.kacperla.touchzoom.MainActivity"
+ android:accessibilityFeedbackType="feedbackGeneric" android:canControlMagnification="true"
+ android:canRetrieveWindowContent="false" android:isAccessibilityTool="true" android:notificationTimeout="100"/>

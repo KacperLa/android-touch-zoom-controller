@@ -1,0 +1,95 @@
+name: Manual signed APK
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    if: github.repository == 'KacperLa/android-touch-zoom-controller' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@017a9effdb900e5b5b2fddfb590a105619dca3c3 # v4.4.2
+        with:
+          gradle-version: '8.13'
+          cache-disabled: true
+      - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - run: bash scripts/test.sh
+      - run: gradle --no-daemon --no-build-cache :app:assembleRelease :app:lintRelease
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: unsigned-apk
+          path: app/build/outputs/apk/release/app-release-unsigned.apk
+          if-no-files-found: error
+          retention-days: 1
+  sign:
+    needs: build
+    if: github.repository == 'KacperLa/android-touch-zoom-controller' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # Configure this environment for main only BEFORE adding secrets.
+    environment: signing
+    steps:
+      # Fresh runner: no checkout, build scripts, Gradle, or shared build cache.
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: sdkmanager 'build-tools;35.0.0'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: unsigned-apk
+          path: unsigned
+      - name: Align APK before exposing secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p signed
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -P 16 -f 4 unsigned/app-release-unsigned.apk signed/touch-zoom.apk
+      - name: Sign and verify original identity
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.TOUCH_ZOOM_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.TOUCH_ZOOM_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.TOUCH_ZOOM_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.TOUCH_ZOOM_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          key_dir="$(mktemp -d "$RUNNER_TEMP/touch-zoom-signing.XXXXXX")"
+          trap 'rm -rf "$key_dir"' EXIT
+          for name in KEYSTORE_BASE64 STORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [[ -z "${!name}" ]]; then echo "Missing signing secret: $name" >&2; exit 1; fi
+          done
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$key_dir/signer.jks"
+          unset KEYSTORE_BASE64
+          signer="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          "$signer" sign --ks "$key_dir/signer.jks" --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass env:STORE_PASSWORD --key-pass env:KEY_PASSWORD signed/touch-zoom.apk
+          "$signer" verify --verbose --print-certs signed/touch-zoom.apk > "$key_dir/verification.txt"
+          fingerprint="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$key_dir/verification.txt" | tr '[:upper:]' '[:lower:]')"
+          [[ "$fingerprint" == '446d153476667dee48a1cfa1588cce34ceeb600c1c143b67c0f63506a18e1b0b' ]] || {
+            echo 'Signing certificate does not match the original app.' >&2; exit 1;
+          }
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -P 16 4 signed/touch-zoom.apk
+          (cd signed && sha256sum touch-zoom.apk > SHA256SUMS)
+      - name: Remove signing material even after failure
+        if: always()
+        shell: bash
+        run: rm -rf "$RUNNER_TEMP"/touch-zoom-signing.*
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: touch-zoom-signed-${{ github.sha }}
+          path: |
+            signed/touch-zoom.apk
+            signed/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 7

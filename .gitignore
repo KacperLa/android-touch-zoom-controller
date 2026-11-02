@@ -1,0 +1,46 @@
+# Build output and machine-local configuration
+.gradle/
+**/build/
+local.properties
+.idea/
+*.iml
+.cxx/
+.externalNativeBuild/
+.gradle-user-home/
+android-sdk/
+sdk/
+
+# Signing material and credentials (never commit)
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+key.properties
+keystore.properties
+signing.properties
+.env
+.env.*
+!.env.example
+*signing-backup*
+*private-signing*
+
+# Generated packages, captures and diagnostic logs
+*.apk
+*.aab
+*.apks
+*.zip
+*.log
+logcat*
+bugreport*
+diagnostics/
+android-diagnostics/
+captures/
+*.trace
+*.perfetto-trace
+
+# Editor/OS files
+.DS_Store
+Thumbs.db
+*.swp
