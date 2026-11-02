@@ -1,5 +1,27 @@
 # Validation and compatibility
 
+## 0.22 visibility-only relocation polish
+
+Based on 0.21 commit `4af3fb9f6078631cafc07e26a1222f6753d922f7`.
+The cause was source-confirmed: already-zoomed DOWN adopted a preview and showed
+the pad while the drag mode was still WAIT; the relocation timer then hid it.
+Pad visibility now requires committed PAN, and WAIT keeps the normal bubble
+artwork visible. Existing gesture-state transitions, timers, magnification writes,
+haptics, 150% relocation transform and API37 keyboard-focus handling are unchanged.
+
+The pure Java suite passes 445,278 assertions, including 17,002 new policy and
+latest-render-queue checks for WAIT/jitter, hold-to-relocate, immediate pan,
+ordinary hold-to-pan, scale gestures, cleanup and in-flight stale render data.
+Android debug assembly and lint passed (zero errors, the unchanged API37
+annotation advisory). Independent review and a separate full helper-suite rerun
+passed. These checks model visibility policy/queue behavior, not Android compositor
+presentation. Source review confirms only the input thread changes pad surface
+visibility; an old worker draw cannot re-show a hidden pad. No new emulator or
+physical-phone visual test is claimed for this release. Verify on the phone that
+long-hold relocation while zoomed never flashes the pad and immediate panning
+still begins normally. Earlier-version runtime results below remain historical.
+
+
 ## 0.21 keyboard-focus fix: current validation
 
 Based on 0.20 commit `8c8067827c78e7235e5969cfc3c69d4467979e26`.

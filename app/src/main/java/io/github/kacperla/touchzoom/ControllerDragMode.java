@@ -7,6 +7,9 @@ public final class ControllerDragMode {
     public int movement(boolean pastSlop){if(mode==WAIT && pastSlop)mode=zoomed?PAN:RELOCATE;return mode;}
     public int hold(){if(mode==WAIT)mode=zoomed?RELOCATE:PAN;return mode;}
     public int mode(){return mode;}
+    /** Adoption of existing zoom is not yet a committed pan. */
+    public boolean showsPad(boolean preview){return preview && mode==PAN;}
+    public boolean hidesBubble(boolean preview){return preview && (mode==PAN || mode==SCALE);}
     public static boolean stopsPreview(boolean latched,boolean alreadyZoomed){return !latched && !alreadyZoomed;}
     public static boolean ownsZoom(boolean latched,boolean alreadyZoomed,boolean preview,boolean pendingTap){
         return latched || (!alreadyZoomed && (preview || pendingTap));

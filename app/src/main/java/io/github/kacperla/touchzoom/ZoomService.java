@@ -605,7 +605,7 @@ public final class ZoomService extends AccessibilityService implements DisplayMa
         float nx=Mapping.normalized(initialCenterX,region.left,region.right-1);
         float ny=Mapping.normalized(initialCenterY,region.top,region.bottom-1);
         padLeft=downX-nx*padWidth; padTop=downY-ny*padHeight;
-        pad.fingerX=downX; pad.fingerY=downY; pad.visible=momentary.ownsPreview() && !zoomGesture;pad.invalidate();
+        pad.fingerX=downX; pad.fingerY=downY; pad.visible=dragMode.showsPad(momentary.ownsPreview());pad.invalidate();
     }
     private void captureInput(MotionEvent e,long arrival){
         if(!captureActive)return;
@@ -645,6 +645,7 @@ public final class ZoomService extends AccessibilityService implements DisplayMa
             pendingScale=Mapping.zoom(initialScale,downY-y,padHeight/2); doubleTapScale.select(pendingScale); momentary.select(pendingScale); pendingX=initialCenterX; pendingY=initialCenterY;
         } else {
             panStarted=true;
+            if(!pad.visible && dragMode.showsPad(momentary.ownsPreview())){pad.visible=true;bubble.invalidate();}
             pendingScale=initialScale>1.01f ? initialScale : rememberedScale;
             pendingX=Mapping.axis(region.left,region.right-1,padLeft,padWidth,x);
             pendingY=Mapping.axis(region.top,region.bottom-1,padTop,padHeight,y);
@@ -751,7 +752,7 @@ public final class ZoomService extends AccessibilityService implements DisplayMa
         @Override protected void onDraw(Canvas c){
             // Draw nothing, but retain this view/surface and its touch stream.
             // The expanded rectangular pad is a separate surface and remains visible.
-            if(!bubbleAppearance.shouldDrawArtwork(active && momentary.ownsPreview(),relocating))return;
+            if(!bubbleAppearance.shouldDrawArtwork(active && dragMode.hidesBubble(momentary.ownsPreview()),relocating))return;
             float r=getWidth()/2f;
             // Original Orbit artwork: a high-contrast C-shaped ring and thumb-point dot.
             // The two-tone perimeter remains visible on both light and dark content.
@@ -792,7 +793,7 @@ public final class ZoomService extends AccessibilityService implements DisplayMa
         Pad(Surface surface,SurfaceControl control){ownedSurface=surface;ownedControl=control;renderThread.start();renderer=new Handler(renderThread.getLooper());}
         int bufferW,bufferH;float positionedX=Float.NaN,positionedY=Float.NaN;boolean shown;
         void invalidate(){
-            PadSnapshot snapshot=new PadSnapshot(visible,padLeft,padTop,padWidth,padHeight,fingerX-padLeft,fingerY-padTop,density,panStarted,probe.generation());
+            PadSnapshot snapshot=new PadSnapshot(visible && active && dragMode.showsPad(momentary.ownsPreview()),padLeft,padTop,padWidth,padHeight,fingerX-padLeft,fingerY-padTop,density,panStarted,probe.generation());
             if(stopped)return;
             if(snapshot.visible && probe.recording())probe.mark(panStarted?"tracking marker snapshot offered":"initial pad snapshot offered",SystemClock.uptimeMillis(),-1);
             if(renderQueue.offer(snapshot))renderer.post(this::renderLatest);

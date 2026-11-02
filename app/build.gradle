@@ -11,8 +11,8 @@ android {
         minSdk 34
         targetSdk 35
         testInstrumentationRunner 'io.github.kacperla.touchzoom.ServiceRuntimeProbe'
-        versionCode 21
-        versionName '0.21-keyboard-focus'
+        versionCode 22
+        versionName '0.22-pad-visibility'
     }
     if (retainedKey != null && !retainedKey.isBlank()) {
         signingConfigs {

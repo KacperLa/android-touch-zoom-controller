@@ -264,3 +264,12 @@ not a keyboard-reopen workaround and adds no permissions. The previous Android
 older-platform keyboard interaction. Compilation uses SDK 37; minimum API 34
 and target API 35 remain unchanged. Zoom gestures, rendering and ownership guards
 are unchanged from 0.20. See VALIDATION.md for actual runtime coverage.
+
+## 0.22: no touchpad flash before relocating existing zoom
+
+While already zoomed, touching the controller no longer displays the expanded
+pad before the gesture is classified. The normal bubble remains visible while
+waiting; the existing stationary hold enlarges it to 150% for relocation, without
+showing the pad. An immediate drag that commits to panning shows the pad on the
+existing next display frame. No hold duration, movement threshold, magnification
+command, haptic, relocation timing or keyboard-focus setting changes.
