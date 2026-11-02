@@ -181,3 +181,20 @@ Pull requests run tests, lint, and an unsigned release build without signing sec
 A separate manual workflow can sign a trusted `main` build with the original key.
 See [CI.md](CI.md) for the required protected environment and encrypted secrets setup,
 artifact visibility, certificate verification, and current validation limits.
+
+## 0.17 experimental hold-entry easing
+
+Separate experiment based on preserved `baseline-0.16` (commit2576b948).
+The new setting **Experimental: ease hold-to-zoom entry (120 ms)** defaults on;
+turn it off for the previous immediate entry without reinstalling. Only ordinary
+hold-to-pan entry changes. Sticky taps and double-tap scale adjustment do not.
+System disabled animations bypass easing. This is NOT a Bluetooth mouse delay fix.
+
+Entry starts from actual scale, retains the selected target, and combines the
+latest finger center with eased scale in one coordinator. Scale commands are at
+most once per17 ms and wait for matching scale feedback; elapsed time skips missed
+intermediate steps rather than replaying them. The logical pad anchor stays fixed
+through that gesture. A missing scale report stops easing after the existing
+180 ms bounded check for an outstanding entry request and resumes center-only pan without replaying scales.
+Release/cancel/new gesture/lifecycle interruption cancels pending entry work.
+Normal pan after entry keeps its existing display-frame cadence, with no new cap.

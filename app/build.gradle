@@ -10,8 +10,8 @@ android {
         applicationId 'io.github.kacperla.touchzoom'
         minSdk 34
         targetSdk 35
-        versionCode 16
-        versionName '0.16-orbit-controller'
+        versionCode 17
+        versionName '0.17-entry-easing-experiment'
     }
     if (retainedKey != null && !retainedKey.isBlank()) {
         signingConfigs {
