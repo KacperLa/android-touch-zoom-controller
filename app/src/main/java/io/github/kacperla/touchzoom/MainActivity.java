@@ -20,10 +20,10 @@ public final class MainActivity extends Activity {
         LinearLayout layout = new LinearLayout(this); layout.setOrientation(LinearLayout.VERTICAL);
         int p = (int)(24 * getResources().getDisplayMetrics().density); layout.setPadding(p,p,p,p);
         scroll.addView(layout); setContentView(scroll);
-        TextView title = new TextView(this); title.setText("Touch Zoom Controller\nPrototype 0.15"); title.setTextSize(28); layout.addView(title);
+        TextView title = new TextView(this); title.setText("Touch Zoom Controller\nPrototype 0.17 entry-easing experiment"); title.setTextSize(28); layout.addView(title);
         status = new TextView(this); status.setTextSize(18); layout.addView(status);
         addSizeSettings(layout);
-        addDelaySettings(layout);
+        addDelaySettings(layout);addEntryEasing(layout);
         addOpacitySettings(layout);
         TextView help = new TextView(this); help.setTextSize(18);
         help.setText("\nControls\n• Drag immediately to move the circle; it grows to 150% while relocating and returns on release. A short 100 ms pause distinguishes holding from dragging.\n• Hold still for the short pause plus your extra delay (1 second total by default), then drag to zoom and pan. Release to zoom out unless persistent zoom is on. Light system haptics mark zoom engagement and release-to-unzoom.\n• Quick tap before zoom engages to toggle persistent zoom on/off (confirmed after the double-tap interval). At zero extra, release within 100 ms for a tap.\n• Double-tap, keep the second touch down, and slide up/down to adjust the remembered zoom level. Release keeps zoom on only when toggled on.\n• Zero extra delay still keeps the short 100 ms pause. Moving the circle does not change persistent zoom.\n\nThe controller temporarily lifts above a docked keyboard when covered, then returns when it closes. Floating keyboards may not report a usable height.\n\nThe circle hides during active zoom panning; the pad stays visible. It returns when your finger lifts so you can tap persistent zoom off. Its idle opacity is adjustable in settings above.\n\nThe pad keeps the screen’s aspect ratio and anchors to the current viewport. Near an edge it may extend off-screen: move the circle inward for full travel.\n\nPrivacy\nThis service controls magnification and displays an overlay. It does not read screen content, capture the screen, send network traffic or inject taps. Android asks you to enable the accessibility service yourself.\n\nPrototype limitations\nFull-screen zoom only, Android 14+. Folding/rotation cancels the current gesture and repositions the circle. Real-device testing of these changes is still required.\n"); layout.addView(help);
@@ -68,6 +68,16 @@ public final class MainActivity extends Activity {
             @Override public void onStopTrackingTouch(SeekBar bar){ }
         });
         setSize(preferences.getInt(PadSettings.KEY,PadSettings.DEFAULT_DP));
+    }
+    private void addEntryEasing(LinearLayout layout){
+        android.widget.CheckBox option=new android.widget.CheckBox(this);
+        option.setText(R.string.entry_easing_title);
+        option.setMinHeight(dp(48));option.setChecked(preferences.getBoolean(EntryRamp.KEY,true));
+        option.setOnCheckedChangeListener((button,checked)->preferences.edit().putBoolean(EntryRamp.KEY,checked).apply());
+        layout.addView(option);
+        TextView help=new TextView(this);help.setTextSize(17);
+        help.setText(R.string.entry_easing_help);
+        layout.addView(help);
     }
     private void addDelaySettings(LinearLayout layout){
         TextView heading=new TextView(this);heading.setText(R.string.activation_title);heading.setTextSize(23);heading.setAccessibilityHeading(true);layout.addView(heading);

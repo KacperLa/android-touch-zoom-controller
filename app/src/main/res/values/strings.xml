@@ -1,1 +1,3 @@
-<resources><string name="service_description">A floating touchpad for controlling full-screen magnification. It does not read screen content, capture screenshots, inject clicks, or access the internet. Enable only if you want this prototype to control screen magnification.</string></resources>
+<resources><string name="service_description">A floating touchpad for controlling full-screen magnification. It does not read screen content, capture screenshots, inject clicks, or access the internet. Enable only if you want this prototype to control screen magnification.</string>    <string name="entry_easing_title">Experimental: ease hold-to-zoom entry (120 ms)</string>
+    <string name="entry_easing_help">Hold-to-pan only. Your finger tracks during a short zoom-in ramp. Off restores immediate entry. Sticky taps and double-tap scale adjustment are unchanged. Respects system disabled animations. Not a Bluetooth-mouse delay fix.</string>
+</resources>

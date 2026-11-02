@@ -1,6 +1,7 @@
 package io.github.kacperla.touchzoom;
 
 import android.accessibilityservice.AccessibilityService;
+import android.animation.ValueAnimator;
 import android.accessibilityservice.MagnificationConfig;
 import android.content.*;
 import android.content.res.Configuration;
@@ -43,11 +44,24 @@ public final class ZoomService extends AccessibilityService implements DisplayMa
     private final UpdatePacer pacer=new UpdatePacer();
     private final ZoomHaptics zoomHaptics=new ZoomHaptics();
     private final ScaleBackpressure scaleGate=new ScaleBackpressure();
+    private final EntryRamp entryRamp=new EntryRamp();
+    private boolean entryAnchorFrozen;
+    private final Runnable rampTick=()->{if(active && entryRamp.running())queueFrame();};
+    private void scheduleRamp(){
+        handler.removeCallbacks(rampTick);
+        if(active && entryRamp.running() && !scaleGate.waiting())
+            handler.postAtTime(rampTick,Math.max(SystemClock.uptimeMillis(),entryRamp.nextAt()));
+    }
     private final Runnable scaleTimeout=()->{
-        if(active && zoomGesture && scaleGate.waiting()){
+        if(active && (zoomGesture || entryRamp.running()) && scaleGate.waiting()){
             MagnificationConfig actual=config();
             if(actual!=null)observeScale(actual);
             if(scaleGate.waiting()){
+                if(entryRamp.running()){
+                    entryRamp.cancel();scaleGate.reset();handler.removeCallbacks(rampTick);
+                    hasPending=true;queueFrame(); // Keep panning at confirmed/current scale; never replay ramp.
+                    trace("entry easing stopped: scale acknowledgment missing");return;
+                }
                 trace("scale awaiting report: no retry queued");
                 Toast.makeText(this,"Zoom update not confirmed. Updates paused; release to stop.",Toast.LENGTH_SHORT).show();
             }
@@ -57,7 +71,9 @@ public final class ZoomService extends AccessibilityService implements DisplayMa
         if(state.getMode()!=MagnificationConfig.MAGNIFICATION_MODE_FULLSCREEN || !state.isActivated())return;
         if(scaleGate.observe(state.getScale())){
             handler.removeCallbacks(scaleTimeout);
-            if(active && zoomGesture && hasPending)queueFrame();
+            boolean wasRamp=entryRamp.running();entryRamp.acknowledged();
+            if(wasRamp){if(entryRamp.running())scheduleRamp();else if(active && hasPending)queueFrame();}
+            else if(active && zoomGesture && hasPending)queueFrame();
         }
     }
 
@@ -161,7 +177,7 @@ public final class ZoomService extends AccessibilityService implements DisplayMa
         if(OpacitySettings.KEY.equals(key) && bubble!=null && !active) {
             bubble.setAlpha(OpacitySettings.normalize(prefs.getInt(OpacitySettings.KEY,OpacitySettings.DEFAULT_PERCENT))/100f);
         }
-        if((PadSettings.KEY.equals(key) || ActivationSettings.KEY.equals(key)) && wm!=null && !destroyed) {
+        if((PadSettings.KEY.equals(key) || ActivationSettings.KEY.equals(key) || EntryRamp.KEY.equals(key)) && wm!=null && !destroyed) {
             cancelGesture(); updateGeometry(); if(pad!=null)pad.invalidate();
         }
     };
@@ -176,7 +192,16 @@ public final class ZoomService extends AccessibilityService implements DisplayMa
         momentary.select(targetScale);
         zoomHaptics.requestEngage(isReportedZoomed());
         probe.mark("activation call start",SystemClock.uptimeMillis(),-1);
-        apply(targetScale,hasPending ? pendingX : initialCenterX,hasPending ? pendingY : initialCenterY,false);
+        float x=hasPending ? pendingX : initialCenterX,y=hasPending ? pendingY : initialCenterY;
+        boolean easeEntry=!zoomGesture && prefs.getBoolean(EntryRamp.KEY,true) && ValueAnimator.areAnimatorsEnabled();
+        MagnificationConfig actual=easeEntry ? config() : null;
+        float actualScale=actual!=null && actual.isActivated() ? actual.getScale() : 1f;
+        if(!zoomGesture && entryRamp.start(SystemClock.uptimeMillis(),actualScale,targetScale,
+                easeEntry)){
+            entryAnchorFrozen=true;pendingX=x;pendingY=y;pendingScale=targetScale;
+            long now=SystemClock.uptimeMillis();float first=entryRamp.value(now);entryRamp.sent(now);
+            apply(first,x,y,false);scheduleRamp();
+        }else apply(targetScale,x,y,false);
         probe.mark("activation call end",SystemClock.uptimeMillis(),-1);
         hasPending=false;
         // No synchronous read-back or canvas lock between activation and the next input event.
@@ -190,6 +215,15 @@ public final class ZoomService extends AccessibilityService implements DisplayMa
     private final Choreographer.FrameCallback frame = nanos -> {
         frameQueued=false;
         if(probe.recording()){probe.span("frame scheduling wait",frameScheduledAt,SystemClock.uptimeMillis());cadence.tick(CadenceStats.TRACKING_FRAME,nanos);}
+        if(active && momentary.ownsPreview() && entryRamp.running() && !destroyed){
+            // One coordinator owns BOTH scale and latest center during entry; never competing writes.
+            if(pad!=null && pad.visible)pad.invalidate();
+            long now=SystemClock.uptimeMillis();
+            if(scaleGate.waiting())return;
+            if(!entryRamp.ready(now)){scheduleRamp();return;}
+            float value=entryRamp.value(now);entryRamp.sent(now);hasPending=false;
+            apply(value,pendingX,pendingY,false);scheduleRamp();return;
+        }
         if(active && momentary.ownsPreview() && hasPending && !destroyed){
             if(zoomGesture && scaleGate.waiting())return; // Latest desired values stay; callback resumes.
             hasPending=false;
@@ -328,7 +362,7 @@ public final class ZoomService extends AccessibilityService implements DisplayMa
         int feedback=zoomHaptics.observe(isReportedZoomed());
         if(bubble!=null && feedback!=ZoomHaptics.NONE)bubble.performHapticFeedback(
             feedback==ZoomHaptics.ENGAGE?HapticFeedbackConstants.GESTURE_START:HapticFeedbackConstants.GESTURE_END);
-        if(active && !zoomGesture && momentary.ownsPreview() && !panStarted && state.isActivated()
+        if(active && !zoomGesture && momentary.ownsPreview() && !panStarted && !entryAnchorFrozen && state.isActivated()
                 && Float.isFinite(state.getCenterX()) && Float.isFinite(state.getCenterY())){
             anchorPad(state.getCenterX(),state.getCenterY());if(pad!=null && pad.visible)pad.invalidate();
         }
@@ -361,7 +395,7 @@ public final class ZoomService extends AccessibilityService implements DisplayMa
     }
     private boolean apply(float scale,float x,float y,boolean animate) {
         if(diagnosticEnabled())trace("request t="+SystemClock.uptimeMillis()+" ON scale="+scale+" cx="+x+" cy="+y);
-        boolean gated=active && zoomGesture;
+        boolean gated=active && (zoomGesture || entryRamp.running());
         if(gated)scaleGate.sent(scale);
         long controlStart=SystemClock.uptimeMillis();
         boolean ok = magnifier.setMagnificationConfig(new MagnificationConfig.Builder()
@@ -370,11 +404,11 @@ public final class ZoomService extends AccessibilityService implements DisplayMa
         // Do not cancel a healthy gesture merely because a request was a no-op.
         probe.span("scale/control call duration",controlStart,SystemClock.uptimeMillis());
         if(gated){
-            if(!ok)scaleGate.reset();
+            if(!ok){scaleGate.reset();entryRamp.acknowledged();}
             else {
                 // An already-reported matching scale needs no new state-change callback.
                 if(lastReportedConfig!=null)observeScale(lastReportedConfig);
-                if(scaleGate.waiting())handler.postDelayed(scaleTimeout,1000);
+                if(scaleGate.waiting())handler.postDelayed(scaleTimeout,entryRamp.running()?180:1000);
             }
         }
         pacer.sent(SystemClock.uptimeMillis(),scale,x,y);
@@ -429,7 +463,7 @@ public final class ZoomService extends AccessibilityService implements DisplayMa
         captureInput(e,arrival);
         if(probe.recording()){Choreographer.getInstance().removeFrameCallback(cadenceFrame);Choreographer.getInstance().postFrameCallback(cadenceFrame);}
         reconcileIdleLatch();
-        panStarted=false;pacer.reset();scaleGate.reset();handler.removeCallbacks(scaleTimeout);
+        panStarted=false;entryAnchorFrozen=false;entryRamp.cancel();handler.removeCallbacks(rampTick);pacer.reset();scaleGate.reset();handler.removeCallbacks(scaleTimeout);
         handler.removeCallbacks(fade); bubble.setAlpha(1);
         active=true;setRefreshVote(true); bubble.invalidate(); failureShown=false; pointerId=e.getPointerId(0); moved=false; relocating=false; hasPending=false;
         downX=e.getRawX(); downY=e.getRawY(); downTime=e.getEventTime();
@@ -536,6 +570,7 @@ public final class ZoomService extends AccessibilityService implements DisplayMa
         boolean restoreSize=relocating;
         active=false;setRefreshVote(false);Choreographer.getInstance().removeFrameCallback(cadenceFrame); pointerId=-1; relocating=false; hasPending=false;
         if(restoreSize)applyBubbleTransform();
+        entryRamp.cancel();entryAnchorFrozen=false;handler.removeCallbacks(rampTick);
         scaleGate.reset();handler.removeCallbacks(scaleTimeout);
         handler.removeCallbacks(activatePreview); Choreographer.getInstance().removeFrameCallback(frame); frameQueued=false;
         if(!preservePreview)stopPreview();
