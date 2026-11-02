@@ -42,6 +42,17 @@ public final class ZoomService extends AccessibilityService implements DisplayMa
     private boolean moved, zoomGesture, relocating, active, frameQueued, hasPending, destroyed, failureShown;
     private final UpdatePacer pacer=new UpdatePacer();
     private final ZoomHaptics zoomHaptics=new ZoomHaptics();
+    private final DoubleTapScale doubleTapScale=new DoubleTapScale();
+    private final ControllerDragMode dragMode=new ControllerDragMode();
+    private boolean zoomedAtDown,preserveZoomAtDown,pendingTapWasZoomed;
+    private final Runnable relocateZoomed=this::startZoomedRelocation;
+    private void startZoomedRelocation(){
+        if(!active || destroyed || zoomGesture || !zoomedAtDown || moved)return;
+        if(dragMode.hold()!=ControllerDragMode.RELOCATE)return;
+        relocating=true;lastTapTime=0;hasPending=false;momentary.end();
+        Choreographer.getInstance().removeFrameCallback(frame);frameQueued=false;
+        pad.visible=false;pad.invalidate();applyBubbleTransform();bubble.invalidate();
+    }
     private final ScaleBackpressure scaleGate=new ScaleBackpressure();
     private final Runnable scaleTimeout=()->{
         if(active && zoomGesture && scaleGate.waiting()){
@@ -167,6 +178,7 @@ public final class ZoomService extends AccessibilityService implements DisplayMa
     };
     private final Runnable activatePreview = () -> {
         if(!active || relocating || destroyed)return;
+        if(!zoomGesture && dragMode.hold()!=ControllerDragMode.PAN)return;
         probe.mark("hold timer / activation entry",SystemClock.uptimeMillis(),-1);
         pad.visible=!zoomGesture;
         momentary.begin(initialScale);
@@ -245,7 +257,7 @@ public final class ZoomService extends AccessibilityService implements DisplayMa
         if(!prefs.contains(ActivationSettings.KEY))prefs.edit().putInt(ActivationSettings.KEY,
             ActivationSettings.migratedExtra(prefs.getInt(ActivationSettings.LEGACY_KEY,1000))).apply();
         normalizedX = prefs.getFloat("x", .82f); normalizedY = prefs.getFloat("y", .72f);
-        rememberedScale = Mapping.clamp(prefs.getFloat("scale",2),1.1f,8);
+        rememberedScale = Mapping.clamp(prefs.getFloat("scale",2),1.01f,8);
         wm = getSystemService(WindowManager.class); displays = getSystemService(DisplayManager.class);
         power=getSystemService(PowerManager.class);
         magnifier = getMagnificationController(); density = getResources().getDisplayMetrics().density;
@@ -388,11 +400,14 @@ public final class ZoomService extends AccessibilityService implements DisplayMa
     }
     public void turnOff() { releaseAllZoom();if(magnifier!=null){magnifier.resetCurrentMagnification(false);refreshBubbleArtwork(config());} }
     private void releaseAllZoom(){
-        boolean owned=latch.isLatched() || momentary.ownsPreview() || latch.hasPendingTap();
+        boolean owned=ControllerDragMode.ownsZoom(latch.isLatched(),preserveZoomAtDown,momentary.ownsPreview(),latch.hasPendingTap());
         latch.clear();cancelGesture();
         if(owned && magnifier!=null){magnifier.resetCurrentMagnification(false);refreshBubbleArtwork(config());}
     }
     private void toggleLatch(){
+        // A quick tap on externally-owned zoom is still an explicit user request to turn it off.
+        if(pendingTapWasZoomed && !latch.isLatched())latch.setLatched(true);
+        pendingTapWasZoomed=false;
         if(momentary.ownsPreview()){rememberedScale=momentary.selectedScale();momentary.end();prefs.edit().putFloat("scale",rememberedScale).apply();}
         if(latch.toggle()){
             zoomHaptics.requestEngage(isReportedZoomed());apply(rememberedScale,centerX(),centerY(),false);
@@ -404,9 +419,9 @@ public final class ZoomService extends AccessibilityService implements DisplayMa
     private void stopPreview() {
         if (!momentary.end()) return;
         trace("end preview latched="+latch.isLatched());
-        rememberedScale=momentary.selectedScale();
+        rememberedScale=zoomGesture ? (doubleTapScale.shouldLatch()?doubleTapScale.selected():rememberedScale) : momentary.selectedScale();
         if(prefs!=null)prefs.edit().putFloat("scale",rememberedScale).apply();
-        if(magnifier!=null && !latch.isLatched()){
+        if(magnifier!=null && ControllerDragMode.stopsPreview(latch.isLatched(),preserveZoomAtDown)){
             magnifier.setMagnificationConfig(new MagnificationConfig.Builder()
                 .setMode(MagnificationConfig.MAGNIFICATION_MODE_FULLSCREEN).setActivated(false).setScale(1).build(),false);
             refreshBubbleArtwork(config());
@@ -444,7 +459,12 @@ public final class ZoomService extends AccessibilityService implements DisplayMa
         }
         if(zoomGesture) lastTapTime=0;
         MagnificationConfig initial=config();lastReportedConfig=initial;
+        zoomedAtDown=initial!=null && initial.isActivated() && Float.isFinite(initial.getScale()) && initial.getScale()>1.01f;
+        preserveZoomAtDown=zoomedAtDown;
+        dragMode.begin(zoomedAtDown,zoomGesture);
         initialScale=initial!=null && initial.isActivated() && Float.isFinite(initial.getScale()) && initial.getScale()>1.01f ? initial.getScale() : rememberedScale;
+        if(zoomGesture)initialScale=doubleTapScale.begin(initial!=null && initial.isActivated(),
+            initial==null?1:initial.getScale());
         initialCenterX=initial!=null && Float.isFinite(initial.getCenterX()) ? initial.getCenterX() : width/2f;
         initialCenterY=initial!=null && Float.isFinite(initial.getCenterY()) ? initial.getCenterY() : height/2f;
         moveStartX=bubbleParams.x; moveStartY=bubbleParams.y;
@@ -452,6 +472,11 @@ public final class ZoomService extends AccessibilityService implements DisplayMa
         // Include preparation in the deadline; no extra platform long-press timeout.
         // Second-tap scale preview remains a distinct immediate gesture.
         if(zoomGesture){pad.visible=false;activatePreview.run();}
+        else if(zoomedAtDown){
+            // Already magnified: adopt only a gesture preview, never send a new scale or take ownership.
+            momentary.begin(initialScale);
+            handler.postAtTime(relocateZoomed,UpdatePacer.holdDeadline(downTime,delay));
+        }
         else {probe.mark("hold deadline",UpdatePacer.holdDeadline(downTime,delay),-1);handler.postAtTime(activatePreview,UpdatePacer.holdDeadline(downTime,delay));}
         region.set(magnifier.getMagnificationRegion().getBounds());
         if(region.isEmpty()) region.set(0,0,width,height);
@@ -479,11 +504,14 @@ public final class ZoomService extends AccessibilityService implements DisplayMa
         }
         float x=e.getRawX(),y=e.getRawY();
         if(!moved && Math.hypot(x-downX,y-downY)>3*density)moved=true;
+        int chosen=dragMode.movement(moved);
+        if(zoomedAtDown && chosen==ControllerDragMode.PAN)handler.removeCallbacks(relocateZoomed);
+        if(zoomedAtDown && chosen==ControllerDragMode.WAIT)return; // Jitter must not pan before mode locks.
         if(relocating){place(moveStartX+x-downX,moveStartY+y-downY);return;}
         if(GestureRules.waitingForHold(zoomGesture,momentary.ownsPreview())){
             // Anchor zoom to the latest stationary finger, not stale DOWN jitter.
             pad.fingerX=x;pad.fingerY=y;
-            if(moved){
+            if(chosen==ControllerDragMode.RELOCATE){
                 relocating=true;lastTapTime=0;handler.removeCallbacks(activatePreview);
                 place(moveStartX+x-downX,moveStartY+y-downY);bubble.invalidate();
             }
@@ -492,7 +520,7 @@ public final class ZoomService extends AccessibilityService implements DisplayMa
         // Once the hold engages zoom, every move pans; slop only classifies taps.
         if(zoomGesture && !moved)return;
         if(zoomGesture) {
-            pendingScale=Mapping.zoom(initialScale,downY-y,padHeight/2); momentary.select(pendingScale); pendingX=initialCenterX; pendingY=initialCenterY;
+            pendingScale=Mapping.zoom(initialScale,downY-y,padHeight/2); doubleTapScale.select(pendingScale); momentary.select(pendingScale); pendingX=initialCenterX; pendingY=initialCenterY;
         } else {
             panStarted=true;
             pendingScale=initialScale>1.01f ? initialScale : rememberedScale;
@@ -505,6 +533,7 @@ public final class ZoomService extends AccessibilityService implements DisplayMa
         if(momentary.ownsPreview() && !(zoomGesture && scaleGate.waiting()))queueFrame();
     }
     private boolean isTap(MotionEvent e){
+        if(zoomedAtDown && !zoomGesture)return !moved && !relocating && e.getEventTime()-downTime<Math.min(250,ActivationSettings.totalMs(prefs.getInt(ActivationSettings.KEY,ActivationSettings.DEFAULT_MS)));
         return GestureRules.tapBeforeHold(moved,relocating,e.getEventTime()-downTime,
             zoomGesture,momentary.ownsPreview(),ActivationSettings.totalMs(
                 prefs.getInt(ActivationSettings.KEY,ActivationSettings.DEFAULT_MS)));
@@ -520,20 +549,34 @@ public final class ZoomService extends AccessibilityService implements DisplayMa
             prefs.edit().putFloat("x",normalizedX).putFloat("y",normalizedY).apply();
         }
         if(tap && zoomGesture){
+            if(initialScale<=1.01f)momentary.select(rememberedScale); // Non-drag double tap retains prior toggle target.
             lastTapTime=0;endGesture(true);toggleLatch(); // End scale gate before independent tap-toggle write.
         }else if(tap){
             lastTapTime=e.getEventTime();lastTapX=downX;lastTapY=downY;
-            latch.queueTap();endGesture(true);
+            pendingTapWasZoomed=zoomedAtDown;latch.queueTap();endGesture(true);
             handler.postDelayed(singleTap,ViewConfiguration.getDoubleTapTimeout());
+        }else if(zoomGesture && moved && momentary.ownsPreview()){
+            // A deliberate scale drag commits only its latest selection, not queued intermediate frames.
+            float selected=doubleTapScale.selected();boolean keepZoom=doubleTapScale.shouldLatch();
+            lastTapTime=0;pendingTapWasZoomed=false;endGesture(true);momentary.end();
+            latch.setLatched(keepZoom);
+            if(keepZoom){
+                rememberedScale=selected;prefs.edit().putFloat("scale",selected).apply();
+                apply(selected,initialCenterX,initialCenterY,false);
+            }else{
+                zoomHaptics.requestRelease(isReportedZoomed());
+                magnifier.resetCurrentMagnification(false);refreshBubbleArtwork(config());
+            }
+            if(bubble!=null)bubble.invalidate();
         }else{
             lastTapTime=0;
-            if(momentary.ownsPreview() && !latch.isLatched())zoomHaptics.requestRelease(isReportedZoomed());
+            if(momentary.ownsPreview() && ControllerDragMode.stopsPreview(latch.isLatched(),preserveZoomAtDown))zoomHaptics.requestRelease(isReportedZoomed());
             endGesture();
         }
     }
     private void endGesture() { endGesture(false); }
     private void endGesture(boolean preservePreview) {
-        boolean restoreSize=relocating;
+        boolean restoreSize=relocating;dragMode.end();handler.removeCallbacks(relocateZoomed);
         active=false;setRefreshVote(false);Choreographer.getInstance().removeFrameCallback(cadenceFrame); pointerId=-1; relocating=false; hasPending=false;
         if(restoreSize)applyBubbleTransform();
         scaleGate.reset();handler.removeCallbacks(scaleTimeout);
@@ -542,7 +585,7 @@ public final class ZoomService extends AccessibilityService implements DisplayMa
         if(pad!=null){pad.visible=false;pad.invalidate();} if(bubble!=null)bubble.invalidate();
         handler.removeCallbacks(fade); handler.postDelayed(fade,1800);
     }
-    private void cancelGesture() {zoomHaptics.cancel();finishPhase("lifecycle cancel",SystemClock.uptimeMillis(),-1);trace("CANCEL gesture"); handler.removeCallbacks(singleTap);latch.cancelPendingTap();lastTapTime=0;endGesture(); }
+    private void cancelGesture() {pendingTapWasZoomed=false;zoomHaptics.cancel();finishPhase("lifecycle cancel",SystemClock.uptimeMillis(),-1);trace("CANCEL gesture"); handler.removeCallbacks(singleTap);latch.cancelPendingTap();lastTapTime=0;endGesture(); }
     private void geometryChanged() {long queryStart=SystemClock.uptimeMillis();try{ if(wm==null || destroyed) return;
         WindowMetrics metrics=wm.getCurrentWindowMetrics(); Rect b=metrics.getBounds();
         float nextDensity=getResources().getDisplayMetrics().density;
