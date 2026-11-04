@@ -47,6 +47,10 @@ public final class ServiceRuntimeProbe extends Instrumentation {
             else if("focus-all".equals(scenario)){
                 for(String trial:new String[]{"tap","hold","relocate","relayout","rotate"})focusTrial(trial);
             }
+            else if("ime-events".equals(scenario))imeEventsTrial("show-hide");
+            else if("ime-events-retry".equals(scenario))imeEventsTrial("retry");
+            else if("ime-events-rotate".equals(scenario))imeEventsTrial("rotate");
+            else if("ime-events-resize".equals(scenario))imeEventsTrial("resize");
             else if("retry".equals(scenario))retry();
             else if("takeover".equals(scenario))takeover();
             else throw new IllegalArgumentException("Unknown scenario "+scenario);
@@ -201,6 +205,257 @@ public final class ServiceRuntimeProbe extends Instrumentation {
             if(fingerDown){event(MotionEvent.ACTION_CANCEL,lastX,lastY);}
             if(rotated)ui.setRotation(UiAutomation.ROTATION_UNFREEZE);
         }
+    }
+    /** Real external IME transitions. Never inject insets or invoke the keyboard-check runnable. */
+    private void imeEventsTrial(String trial)throws Exception{
+        onMain(()->{ZoomService.current.turnOff();return null;});
+        android.accessibilityservice.AccessibilityServiceInfo info=ui.getServiceInfo();
+        info.flags|=android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;
+        ui.setServiceInfo(info);
+        shell("input keyevent KEYCODE_HOME");
+        waitActualIme(false,"initial home",15000,false);
+        SavedPosition saved=onMain(()->new SavedPosition(ZoomService.current));
+        boolean rotated=false;
+        try{
+            // Fixture setup only, before the observed transition. A low saved position must be covered.
+            onMain(()->{
+                ZoomService service=ZoomService.current;
+                service.getSharedPreferences("controller",0).edit().putFloat("x",.82f).putFloat("y",.95f).apply();
+                setPrivateFloat(service,"normalizedX",.82f);setPrivateFloat(service,"normalizedY",.95f);
+                invokePrivate(service,"updateGeometry");return null;
+            });
+            assertInsetsObserver("before external editor");
+            assertKeyboardIdle("hidden baseline");
+            Rect preferred=bubbleBounds();ImeSnapshot before=imeSnapshot();
+            log("IME EVENTS BASELINE "+trial+" preferred="+preferred+" "+before);
+            shell("am start -f 0x10008000 -n io.github.kacperla.touchzoom.test/io.github.kacperla.touchzoom.ProbeEditorActivity");
+            waitVisibleEditor("initial event-driven show",30000);
+            waitImeDelivery(true,before,"initial show");
+            assertLiftedAboveActualIme(preferred,"initial show");
+            assertSavedPosition();assertInsetsObserver("visible external editor");
+            captureEditorPrecondition("ime-events-"+trial);
+            assertKeyboardIdle("visible baseline");
+            touchAndTypeWithIme("initial show");
+
+            if("retry".equals(trial)){
+                ImeSnapshot prior=imeSnapshot();
+                Object oldObserver=onMain(()->privateField(ZoomService.current,"tokenHost"));
+                onMain(()->{
+                    java.lang.reflect.Method fail=ZoomService.class.getDeclaredMethod("failOverlayStartup",RuntimeException.class);
+                    fail.setAccessible(true);fail.invoke(ZoomService.current,new RuntimeException("Synthetic IME observer retry"));
+                    ZoomService.current.retryStartup();return null;
+                });
+                waitService(30000);
+                // Do not reopen the IME or request editor focus after recreating the observer.
+                assertVisibleEditor("retry with already-visible IME");
+                waitImeDelivery(true,prior,"retry with already-visible IME");
+                require(onMain(()->privateField(ZoomService.current,"tokenHost")!=oldObserver),"retry replaces the observer");
+                require(onMain(()->!((View)oldObserver).isAttachedToWindow()),"retry detaches old observer");
+                require(imeSnapshot().generation>prior.generation,"retry advances lifecycle generation");
+                assertInsetsObserver("after retry");assertLiftedAboveActualIme(preferred,"after retry");
+                monitorVisibleEditor("after retry",1200);typeAndVerifyEditor();
+                assertKeyboardIdle("after retry");
+            }else if("rotate".equals(trial)){
+                ImeSnapshot prior=imeSnapshot();
+                int oldRotation=onMain(()->(Integer)privateField(ZoomService.current,"rotation"));
+                int next=oldRotation==android.view.Surface.ROTATION_90?UiAutomation.ROTATION_FREEZE_0:UiAutomation.ROTATION_FREEZE_90;
+                require(ui.setRotation(next),"freeze emulator to different rotation");rotated=true;
+                long until=SystemClock.uptimeMillis()+15000;
+                while(onMain(()->(Integer)privateField(ZoomService.current,"rotation")==oldRotation)
+                    &&SystemClock.uptimeMillis()<until)SystemClock.sleep(100);
+                waitVisibleEditor("rotated external editor",30000);
+                waitImeDelivery(true,prior,"rotation with visible IME");
+                require(onMain(()->(Integer)privateField(ZoomService.current,"rotation")!=oldRotation),"service geometry actually rotated");
+                assertInsetsObserver("after rotation");assertLiftedAboveActualIme(expectedUnobscuredBubble(),"after rotation");
+                assertSavedPosition();typeAndVerifyEditor();assertKeyboardIdle("after rotation");
+            }else if("resize".equals(trial)){
+                // IMEs need not use different numeric/text heights. This dedicated scenario fails
+                // its precondition if they do not; it never labels an unchanged keyboard a resize.
+                Rect oldIme=actualImeBounds();Rect oldBubble=bubbleBounds();ImeSnapshot prior=imeSnapshot();
+                imeCommand("numeric");
+                long until=SystemClock.uptimeMillis()+15000;Rect resized=null;
+                do{
+                    assertVisibleEditor("numeric IME resize");resized=actualImeBounds();
+                    if(resized!=null&&Math.abs(resized.top-oldIme.top)>2)break;
+                    SystemClock.sleep(100);
+                }while(SystemClock.uptimeMillis()<until);
+                require(resized!=null&&Math.abs(resized.top-oldIme.top)>2,
+                    "resize precondition: installed IME must change visible height between text and numeric layouts");
+                waitImeDelivery(true,prior,"visible IME height change");
+                until=SystemClock.uptimeMillis()+5000;
+                while((imeSnapshot().bottom==prior.bottom||Math.abs(bubbleBounds().top-oldBubble.top)<=2)
+                    &&SystemClock.uptimeMillis()<until)SystemClock.sleep(100);
+                require(imeSnapshot().bottom!=prior.bottom,"service observes changed bottom inset while IME stays visible");
+                assertLiftedAboveActualIme(expectedUnobscuredBubble(),"visible IME height change");
+                require(Math.abs(bubbleBounds().top-oldBubble.top)>2,"bubble follows changed IME height while still visible");
+                log("IME RESIZE independent bounds "+oldIme+" -> "+resized+" bubble="+oldBubble+" -> "+bubbleBounds());
+                assertSavedPosition();assertKeyboardIdle("resized visible IME");
+                imeCommand("text");waitVisibleEditor("restored text IME",15000);
+                typeAndVerifyEditor();
+            }
+
+            // Repeat ordinary show/hide after initial startup, and after retry/rotation when requested.
+            for(int cycle=1;cycle<=2;cycle++){
+                ImeSnapshot shown=imeSnapshot();
+                imeCommand("hide");waitActualIme(false,"hide cycle "+cycle,15000,true);
+                waitImeDelivery(false,shown,"hide cycle "+cycle);
+                require(bubbleBounds().equals(expectedUnobscuredBubble()),"hide restores exact preferred placement cycle "+cycle);
+                assertSavedPosition();typeAndVerifyEditor();
+                require(!imeVisible(),"hardware typing does not reopen hidden IME");
+                assertKeyboardIdle("hidden cycle "+cycle);
+                Rect hidden=bubbleBounds();ImeSnapshot hiddenState=imeSnapshot();
+                imeCommand("show");waitVisibleEditor("show cycle "+cycle,15000);
+                waitImeDelivery(true,hiddenState,"show cycle "+cycle);
+                assertLiftedAboveActualIme(hidden,"show cycle "+cycle);
+                assertSavedPosition();touchAndTypeWithIme("show cycle "+cycle);
+                assertKeyboardIdle("visible cycle "+cycle);
+            }
+            log("IME EVENTS VERIFIED "+trial+": external show/hide, observer delivery, idle checks, placement, focus and typing; controllerTouch="
+                +!Boolean.parseBoolean(args.getString("skipControllerTouch","false")));
+        }finally{
+            if(fingerDown)event(MotionEvent.ACTION_CANCEL,lastX,lastY);
+            if(rotated)ui.setRotation(UiAutomation.ROTATION_UNFREEZE);
+            onMain(()->{
+                ZoomService service=ZoomService.current;
+                if(service!=null){
+                    service.turnOff();saved.restore(service);
+                    if((Boolean)privateField(service,"overlayReady"))invokePrivate(service,"updateGeometry");
+                }
+                return null;
+            });
+        }
+    }
+    private void touchAndTypeWithIme(String phase)throws Exception{
+        assertVisibleEditor(phase+" before controller touch");
+        if(Boolean.parseBoolean(args.getString("skipControllerTouch","false"))){
+            log("CONTROLLER TOUCH explicitly omitted "+phase+"; observer-only focus/typing assertions remain required");
+            typeAndVerifyEditor();assertVisibleEditor(phase+" after observer-only typing");return;
+        }
+        Rect bubble=bubbleBounds();event(MotionEvent.ACTION_DOWN,bubble.exactCenterX(),bubble.exactCenterY());
+        require(onMain(()->(Boolean)privateField(ZoomService.current,"active")),"controller actually receives touch "+phase);
+        SystemClock.sleep(25);event(MotionEvent.ACTION_UP,lastX,lastY);
+        monitorVisibleEditor(phase+" after controller touch",800);
+        typeAndVerifyEditor();assertVisibleEditor(phase+" after actual typing");
+        assertHostNonFocusable(phase);
+        onMain(()->{ZoomService.current.turnOff();return null;});
+    }
+    private void imeCommand(String command)throws Exception{
+        log("EXTERNAL IME COMMAND "+command+" "+shell("am broadcast --receiver-foreground -a "+ProbeEditorActivity.IME_COMMAND
+            +" -p io.github.kacperla.touchzoom.test --es command "+command).trim());
+    }
+    private void waitActualIme(boolean visible,String phase,long timeout,boolean requireFocus)throws Exception{
+        long until=SystemClock.uptimeMillis()+timeout;
+        do{
+            if(imeVisible()==visible&&(!requireFocus||editorFocused())){
+                SystemClock.sleep(150);
+                if(imeVisible()==visible&&(!requireFocus||editorFocused()))return;
+            }
+            SystemClock.sleep(100);
+        }while(SystemClock.uptimeMillis()<until);
+        throw new AssertionError(phase+": actual IME visibility must be "+visible+"; focus="+editorFocused()+" actual="+imeVisible());
+    }
+    private void waitImeDelivery(boolean visible,ImeSnapshot prior,String phase)throws Exception{
+        long until=SystemClock.uptimeMillis()+10000;ImeSnapshot current;
+        do{
+            current=imeSnapshot();
+            if(current.events>prior.events&&current.checks>prior.checks&&current.visible==visible
+                &&(visible?current.bottom>0:current.bottom==0)){
+                log("IME DELIVERY "+phase+" before={"+prior+"} after={"+current+"} actual="+actualImeBounds());return;
+            }
+            SystemClock.sleep(100);
+        }while(SystemClock.uptimeMillis()<until);
+        throw new AssertionError(phase+": external keyboard changed but observer event/check/state did not; before={"
+            +prior+"} after={"+current+"} actual="+actualImeBounds());
+    }
+    private void assertKeyboardIdle(String phase)throws Exception{
+        long until=SystemClock.uptimeMillis()+8000,quietSince=SystemClock.uptimeMillis();
+        ImeSnapshot previous=imeSnapshot();boolean settled=false;
+        do{
+            SystemClock.sleep(100);ImeSnapshot now=imeSnapshot();
+            if(now.checks!=previous.checks){previous=now;quietSince=SystemClock.uptimeMillis();}
+            if(SystemClock.uptimeMillis()-quietSince>=750){settled=true;break;}
+        }while(SystemClock.uptimeMillis()<until);
+        require(settled,phase+": keyboard checks reach a quiet interval");
+        ImeSnapshot before=imeSnapshot();SystemClock.sleep(1800);ImeSnapshot after=imeSnapshot();
+        log("IME IDLE "+phase+" duration=1800ms before={"+before+"} after={"+after+"}");
+        require(before.checks==after.checks,phase+": keyboardCheckCount remains exactly stable while idle");
+    }
+    private void assertLiftedAboveActualIme(Rect preferred,String phase)throws Exception{
+        Rect ime=actualImeBounds();require(ime!=null&&!ime.isEmpty(),phase+": independent IME window is visible");
+        require(preferred.bottom>ime.top,phase+": saved low placement is genuinely covered by keyboard");
+        long until=SystemClock.uptimeMillis()+5000;Rect bubble;
+        do{bubble=bubbleBounds();if(bubble.top<preferred.top&&bubble.bottom<=ime.top)break;SystemClock.sleep(100);}
+        while(SystemClock.uptimeMillis()<until);
+        log("IME PLACEMENT "+phase+" preferred="+preferred+" bubble="+bubble+" actualIme="+ime);
+        require(bubble.top<preferred.top,phase+": actual bubble lifts above its preferred position");
+        require(bubble.bottom<=ime.top,phase+": actual bubble is above independently observed IME bounds");
+    }
+    private Rect expectedUnobscuredBubble()throws Exception{return onMain(()->{
+        ZoomService service=ZoomService.current;int width=(Integer)privateField(service,"width");
+        int height=(Integer)privateField(service,"height"),size=(Integer)privateField(service,"diameter");
+        android.view.WindowManager wm=(android.view.WindowManager)privateField(service,"wm");
+        android.graphics.Insets safe=wm.getCurrentWindowMetrics().getWindowInsets().getInsetsIgnoringVisibility(
+            android.view.WindowInsets.Type.systemBars()|android.view.WindowInsets.Type.displayCutout());
+        int x=Math.max(safe.left,Math.min(width-safe.right-size,Math.round(.82f*width-size/2f)));
+        int y=Math.max(safe.top,Math.min(height-safe.bottom-size,Math.round(.95f*height-size/2f)));
+        return new Rect(x,y,x+size,y+size);
+    });}
+    private void assertSavedPosition()throws Exception{
+        require(onMain(()->{
+            ZoomService service=ZoomService.current;android.content.SharedPreferences preferences=service.getSharedPreferences("controller",0);
+            return preferences.getFloat("x",-1)==.82f&&preferences.getFloat("y",-1)==.95f
+                &&(Float)privateField(service,"normalizedX")==.82f&&(Float)privateField(service,"normalizedY")==.95f;
+        }),"automatic IME avoidance never mutates saved or in-memory preferred position");
+    }
+    private void assertInsetsObserver(String phase)throws Exception{onMain(()->{
+        View observer=(View)privateField(ZoomService.current,"tokenHost");
+        require(observer!=null&&observer.isAttachedToWindow(),phase+": real WindowManager observer attached");
+        android.view.WindowManager.LayoutParams params=(android.view.WindowManager.LayoutParams)observer.getLayoutParams();
+        int required=android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+            |android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE|android.view.WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM;
+        require((params.flags&required)==required,phase+": observer cannot receive touch or key focus and participates in IME insets");
+        require(params.alpha==0f,phase+": observer is transparent");
+        log("IME OBSERVER "+phase+" size="+params.width+"x"+params.height+" flags="+params.flags+" focus="+observer.hasWindowFocus());
+        return null;
+    });}
+    private Rect actualImeBounds(){
+        for(android.view.accessibility.AccessibilityWindowInfo window:ui.getWindows()){
+            if(window.getType()==android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD){
+                Rect bounds=new Rect();window.getBoundsInScreen(bounds);if(!bounds.isEmpty())return bounds;
+            }
+        }
+        return null;
+    }
+    private ImeSnapshot imeSnapshot()throws Exception{return onMain(()->new ImeSnapshot(ZoomService.current));}
+    private static final class ImeSnapshot{
+        final long events,checks;final boolean visible;final int bottom,generation;
+        ImeSnapshot(ZoomService service)throws Exception{
+            events=(Long)privateField(service,"insetEventCount");checks=(Long)privateField(service,"keyboardCheckCount");
+            visible=(Boolean)privateField(service,"imeVisible");bottom=(Integer)privateField(service,"imeBottom");
+            generation=(Integer)privateField(service,"startupGeneration");
+        }
+        @Override public String toString(){return "events="+events+" checks="+checks+" ime="+visible+" bottom="+bottom+" generation="+generation;}
+    }
+    private static final class SavedPosition{
+        final boolean hasX,hasY;final float savedX,savedY,memoryX,memoryY;
+        SavedPosition(ZoomService service)throws Exception{
+            android.content.SharedPreferences preferences=service.getSharedPreferences("controller",0);
+            hasX=preferences.contains("x");hasY=preferences.contains("y");
+            savedX=preferences.getFloat("x",.82f);savedY=preferences.getFloat("y",.72f);
+            memoryX=(Float)privateField(service,"normalizedX");memoryY=(Float)privateField(service,"normalizedY");
+        }
+        void restore(ZoomService service)throws Exception{
+            android.content.SharedPreferences.Editor edit=service.getSharedPreferences("controller",0).edit();
+            if(hasX)edit.putFloat("x",savedX);else edit.remove("x");
+            if(hasY)edit.putFloat("y",savedY);else edit.remove("y");edit.apply();
+            setPrivateFloat(service,"normalizedX",memoryX);setPrivateFloat(service,"normalizedY",memoryY);
+        }
+    }
+    private static void setPrivateFloat(Object target,String name,float value)throws Exception{
+        Field field=target.getClass().getDeclaredField(name);field.setAccessible(true);field.setFloat(target,value);
+    }
+    private static void invokePrivate(Object target,String name)throws Exception{
+        java.lang.reflect.Method method=target.getClass().getDeclaredMethod(name);method.setAccessible(true);method.invoke(target);
     }
     private void captureEditorPrecondition(String trial)throws Exception{
         for(android.view.accessibility.AccessibilityWindowInfo window:ui.getWindows()){

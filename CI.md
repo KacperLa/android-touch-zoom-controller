@@ -1,101 +1,86 @@
-# CI and original-key signing
+# Builds and original-key signing
 
-## What runs
+## Unsigned branch checks
 
-- **Unsigned checks**: pull requests and pushes to `main` run helper tests, Android
-  lint, and an **unsigned release** build. No signing secrets are referenced and no
-  APK is uploaded. This uses `pull_request`, never `pull_request_target`.
-- **Manual signed APK**: manually dispatch on `main` in this repository only.
-  It checks out the dispatch commit SHA, tests and builds without secrets, then
-  passes only the unsigned APK to a **fresh signing runner**. The signing job does
-  not check out source or execute Gradle/project scripts. It aligns, signs, verifies
-  the original certificate, and retains the APK and SHA-256 checksum for seven days.
-  The unsigned handoff artifact expires after one day. No GitHub Release is created.
+Pull requests and pushes to `main` or `cleanup/**` run helper/source tests, Android release lint,
+release APK assembly and test-APK compilation without signing secrets. The workflow
+uses `pull_request`, not `pull_request_target`. Compiling instrumentation is not
+running it on an Android device.
 
-Actions are pinned to full commit hashes, token permissions are `contents: read`,
-checkout credentials are not persisted, and build caches are disabled. The key is
-written only to a temporary private directory, removed on exit and in an always-run
-cleanup step. Passwords are passed through environment variables, not command-line
-values. Only APK/checksum paths are uploaded, never the key or diagnostic logs.
+The artifact `touch-zoom-unsigned-<commit SHA>` contains:
 
-**Artifacts on a public repository are not private distribution.** Treat the built
-APK as publicly accessible to people able to download the workflow artifacts.
-A signing key embedded in an encrypted Actions secret is still accessible to any
-workflow that is allowed to use that secret; trusted workflow changes remain vital.
+- `app-release-unsigned.apk`
+- `SOURCE_COMMIT.txt`
+- `SHA256SUMS`
 
-## Required setup (not performed by committing these files)
+Lint output is a separate artifact. Check that the run succeeded and that its source
+commit matches the branch revision being tested before downloading. Verify the
+checksum after extraction. The unsigned APK cannot be installed until signed.
+Branch integration and its successful checks do not imply a merge into `main`.
 
-### Optional local setup helper
+## Sign a downloaded APK locally
 
-With the original keystore already on your own trusted computer, JDK `keytool`,
-Python 3, and `gh` securely authenticated as **KacperLa**, run:
+Use a trusted computer holding the original private keystore. Keep signing material
+outside the repository and outside downloaded artifacts. Align the APK, sign with
+that existing key using Android build-tools `apksigner`, then verify the certificate,
+alignment, package and version before installation. Never use a different debug key
+as a fallback when updating an existing installation.
 
-```sh
-bash scripts/setup-signing.sh /private/path/original.jks
-```
-
-This helper targets only this repository. It creates `signing` with a main-only
-branch policy if absent; if an existing environment permits anything else, it
-stops without weakening that policy. It asks before secret upload, reads passwords
-without echoing, verifies the original certificate, and streams the four values
-into GitHub CLI encryption without storing a base64/password file. It never adds
-keys to Git. It does **not** add a required reviewer or protect `main`; configure
-those in Settings. Do not run it under a terminal recorder or shell tracing.
-If an upload fails partway through, rerun to replace all four values consistently.
-Seven mocked success/failure scenarios passed; real secret upload remains untested.
-
-### Manual alternative and protection checklist
-
-1. Create the GitHub Actions environment **`signing`** in repository Settings →
-   Environments. Restrict its deployment branches/tags to the branch **`main` only**
-   (no tags). Add required review by the owner where supported. Protect `main` and
-   review changes to workflows and build files before merging/signing.
-2. Add these **environment secrets**, not public variables or repository files:
-
-   | Secret | Value |
-   | --- | --- |
-   | `TOUCH_ZOOM_KEYSTORE_BASE64` | Base64 encoding of the existing original binary keystore |
-   | `TOUCH_ZOOM_STORE_PASSWORD` | Original keystore password |
-   | `TOUCH_ZOOM_KEY_ALIAS` | Original key alias |
-   | `TOUCH_ZOOM_KEY_PASSWORD` | Original key password |
-
-   Do not substitute a new key. Base64 is encoding, **not encryption**. The secret
-   must be stored via GitHub's encrypted secret facility. Do not paste values into
-   issues, chat, commits, logs, workflow YAML, or artifact uploads.
-3. From a securely authenticated local GitHub CLI, one option for the binary is:
-
-   ```sh
-   base64 < /private/path/original.jks | gh secret set TOUCH_ZOOM_KEYSTORE_BASE64 \
-     --repo KacperLa/android-touch-zoom-controller --env signing
-   ```
-
-   Set the remaining three with `gh secret set NAME --repo
-   KacperLa/android-touch-zoom-controller --env signing` using its interactive
-   hidden-value prompt. Do not place literal passwords in shell commands/history.
-   Keep a separate private backup. This repository does not contain that backup.
-4. Confirm the four secret **names** exist and environment restrictions are set.
-   Then select Actions → Manual signed APK → Run workflow → `main`. Review the exact
-   commit first. Missing secrets fail the signing step; no substitute signer is used.
-
-The expected original signing-certificate SHA-256 fingerprint is public information:
+The original signing-certificate SHA-256 fingerprint is public:
 
 ```text
 446d153476667dee48a1cfa1588cce34ceeb600c1c143b67c0f63506a18e1b0b
 ```
 
-The workflow verifies the output against it before upload. It does not print the
-certificate or private material. A successful build is not proof of device behavior.
-The APK uses the existing application ID and versionCode **15**, with a release
-(non-debuggable) build type. Same-key updates require a compatible installed version;
-future releases should increment versionCode. Do not assume a newer installed
-version can be downgraded, or that a different local debug key can update this app.
+Use password prompts or environment-based password inputs, not literal passwords
+in commands, shell history or logs. The local signing path does not require uploading
+keys to GitHub or changing signing identity. Keep a separate secure backup.
 
-## Validation status
+The package is `io.github.kacperla.touchzoom`. This cleanup uses version code **33**
+and version name **0.33-repository-cleanup**. Check the installed version and original
+certificate before updating. Android may reject downgrades even with the same key.
+Uninstalling to work around a mismatch removes local settings.
 
-Workflow YAML, embedded shell syntax, action pins, trigger/secret separation, and
-artifact path restrictions were checked locally. The actual Android workflow and
-signing path still require a first successful GitHub run after environment setup.
-No private key was accessed to prepare these files.
+## Optional manual signing workflow
+
+**Manual signed APK** is restricted to trusted `main` in this repository. It checks
+out the exact dispatch commit, tests and builds without secrets, then transfers only
+the unsigned APK to a fresh signing runner. The signing runner does not check out
+source, execute project scripts or run Gradle. It aligns, signs and verifies the
+original certificate before uploading the APK and checksum.
+
+The unsigned handoff expires after one day; signed artifacts after seven days.
+No GitHub Release is created. Actions are pinned, token permissions are
+`contents: read`, checkout credentials are not persisted and build caches are
+disabled. Temporary key material is cleaned up on exit and by an always-run step.
+
+**Public-repository artifacts are not private distribution.** Treat APKs as
+accessible to people able to download the workflow artifacts. An encrypted Actions
+secret can still be accessed by workflows allowed to use it; trusted workflow
+changes and environment protection matter.
+
+### Setup, only if choosing GitHub-hosted signing
+
+Committing the workflow does not configure signing. Before supplying any secrets:
+
+1. Create a `signing` environment restricted to **the `main` branch only**, not tags.
+   Add owner review where supported, protect `main`, and review workflow/build changes.
+2. Add these environment secrets through GitHub's encrypted secret facility:
+   `TOUCH_ZOOM_KEYSTORE_BASE64`, `TOUCH_ZOOM_STORE_PASSWORD`,
+   `TOUCH_ZOOM_KEY_ALIAS`, and `TOUCH_ZOOM_KEY_PASSWORD`.
+3. Use the existing original key. Base64 is encoding, not encryption. Never paste
+   private values into issues, chat, commits, workflow files or artifacts.
+4. Check secret names and branch restrictions, review the exact main commit, then
+   manually dispatch. Missing or mismatched signing material must fail, not fall back.
+
+The optional `scripts/setup-signing.sh` helper uses authenticated `gh`, Python 3
+and JDK `keytool`. It verifies the original certificate, asks before uploading secrets
+and refuses to weaken an existing environment's branch policy. It does **not** add
+required reviewers or protect `main`. Running it changes GitHub configuration and
+is not necessary for local signing. Do not use shell tracing or terminal recording.
+
+A successful build or signature verification does not certify device behavior or
+choose a future distribution signing scheme. See [VALIDATION.md](VALIDATION.md).
 
 References: [GitHub encrypted secrets](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets),
 [Android apksigner](https://developer.android.com/tools/apksigner).

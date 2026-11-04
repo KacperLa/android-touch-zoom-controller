@@ -1,156 +1,123 @@
 # Validation and compatibility
 
-## 0.22 visibility-only relocation polish
+## Current scope
 
-Based on 0.21 commit `4af3fb9f6078631cafc07e26a1222f6753d922f7`.
-The cause was source-confirmed: already-zoomed DOWN adopted a preview and showed
-the pad while the drag mode was still WAIT; the relocation timer then hid it.
-Pad visibility now requires committed PAN, and WAIT keeps the normal bubble
-artwork visible. Existing gesture-state transitions, timers, magnification writes,
-haptics, 150% relocation transform and API37 keyboard-focus handling are unchanged.
+The repository cleanup integrates the later settings, keyboard observer and quick
+menu implementation into the source branch. Version 0.33 targets API 36, requires
+API 34 and compiles against SDK 37.0. Repository integration is not a `main` merge,
+a device test pass or a signing-identity change.
 
-The pure Java suite passes 445,278 assertions, including 17,002 new policy and
-latest-render-queue checks for WAIT/jitter, hold-to-relocate, immediate pan,
-ordinary hold-to-pan, scale gestures, cleanup and in-flight stale render data.
-Android debug assembly and lint passed (zero errors, the unchanged API37
-annotation advisory). Independent review and a separate full helper-suite rerun
-passed. These checks model visibility policy/queue behavior, not Android compositor
-presentation. Source review confirms only the input thread changes pad surface
-visibility; an old worker draw cannot re-show a hidden pad. No new emulator or
-physical-phone visual test is claimed for this release. Verify on the phone that
-long-hold relocation while zoomed never flashes the pad and immediate panning
-still begins normally. Earlier-version runtime results below remain historical.
+Use the exact commit and workflow run when reporting a build result. Helper tests,
+lint and APK assembly validate different things; none establishes smoothness,
+keyboard retention, TalkBack discovery or correct compositor/input behavior.
+Current-build results should be taken from its completed CI run, not inferred from
+the historical results below.
 
+Local cleanup verification passed 42 Java helper suites with 478,570 assertions
+and source guards, plus five Python menu-surface checks (478,575 checks total).
+Android build/lint and device results must be verified separately.
 
-## 0.21 keyboard-focus fix: current validation
+## Automated checks
 
-Based on 0.20 commit `8c8067827c78e7235e5969cfc3c69d4467979e26`.
-Compilation now uses the official API 37.0 SDK, Android Gradle Plugin 9.1.1,
-Gradle 9.3.1 and build-tools 36.0.0. Minimum API 34 and target API 35 are unchanged.
-The original APK signer is retained; no new production permissions were added.
-All 428,276 pure Java assertions pass. Assembly and lint pass with zero errors;
-lint reports one `UseRequiresApi` advisory for the isolated `@TargetApi(37)`
-helper. Independent source and compiled-bytecode review confirmed both creation
-paths and every relayout use `focusable=false` behind explicit API 37 checks.
-No AndroidX annotation dependency or hidden API workaround was added.
+```sh
+bash scripts/test.sh
+gradle :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug
+gradle :app:assembleRelease :app:lintRelease
+```
 
-API 37 software-emulator testing did **not** verify keyboard retention. The
-baseline service eventually started, but a trial failed before interaction because
-the keyboard was not visible within its readiness window. A justified warm retry
-then timed out before service readiness. Patched 0.21 installed and its service
-bound manually, but the final startup probe aborted with “System has crashed.”
-The captured system-server native stack was in task-snapshot/ImageReader graphics
-code; independent `screencap` also aborted in the emulator graphics backend.
-This is not an app keyboard test pass or an established app crash. No repeated
-API 37 trials are counted as successful. The emulator was stopped afterward.
+The helper script compiles with `javac --release 17` and runs the pure Java suites
+and Python source-wiring checks. Coverage includes gesture/tap policy, settings
+migration, keyboard geometry and event coalescing, menu bounds/style, visibility,
+magnification ownership, diagnostics, latest-position rendering and scale
+backpressure. Source checks are not substitutes for runtime surface/input tests.
 
-The same patched 0.21 APK passed actual API 35 service startup with an attached
-bubble, then hold/pan/release: active 2.5x, changed viewport center, and inactive
-1x after release. This exercises the older-platform branch and API37 class
-isolation; it does not validate API37 keyboard retention.
+Previous builds reported `UseRequiresApi` for the explicitly guarded API 37 helper
+and a SeekBar touch-listener accessibility advisory. Assess the actual lint report
+for each build instead of assuming these are the only findings.
 
-The strengthened test fixture requires a focused editor and already-visible IME,
-confirms the controller actually receives input, checks focus/IME throughout the
-interaction, and verifies typing afterward. It never reopens the keyboard after
-controller input. Supplemental screenshots can be explicitly disabled when the
-emulator capture backend is broken, without disabling any functional assertions.
-Pixel verification is still required: with a keyboard already visible, test a
-controller tap, hold-and-pan, relocation, and interaction after rotation/unfolding;
-the keyboard should stay open and typing should remain in the original editor.
+## Historical runtime evidence
 
+### API 35 overlay startup and magnification
 
-## 0.20 overlay startup and external magnification ownership
+A dedicated Android 15 / API 35 AOSP software emulator reproduced the old null-host
+`INTERNAL_SYSTEM_WINDOW` failure with 0.19. **The 0.20 fallback fixed that failure**;
+it does not request privileged permission. Actual 0.20 service tests passed:
 
-Based on 0.19 commit `985e50389dcb8aeddafb6ca5e15f759c325dc08b`.
-Pure Java regression checks passed 428,276 assertions, including 10,046 ownership
-checks. Android debug assembly, test-APK assembly, and Android lint passed.
-The normal APK adds no requested permissions. Independent source review covered
-startup generation invalidation, partial cleanup, renderer resource ownership,
-and external magnification transitions. Helper tests are not Android runtime tests.
+- Overlay startup and visible controller.
+- Hold, pan and release: activation, changed center, then inactive 1x.
+- Preservation of another service's full-screen zoom after release/cancel.
+- Cancellation on external scale takeover or off, without stale-state restoration.
+- Preservation of another service's active window magnification.
+- Forced startup failures followed by successful retry and renderer cleanup.
 
-Actual service tests ran on a dedicated Android 15 / API 35 AOSP x86_64 emulator
-with software CPU acceleration and SwiftShader (no KVM), two cores and 2 GiB RAM.
-After slow framework startup/recovery, display geometry was reduced to 480x800 at
-160 dpi and system animation scales were disabled. These conditions validate
-functionality, not Pixel smoothness, timing, or refresh rate.
+An empty editor retained focus and accepted hardware input after a controller tap,
+but the keyboard was not already visible. That trial is **not** keyboard-retention
+coverage. Version 0.21 also passed API 35 startup and hold/pan/release. These older
+results exercise the fallback; they do not validate the later menu and observer.
+Software-emulator timing is not a physical-device latency or frame-rate measurement.
 
-- Baseline 0.19 reproduced the null-host `INTERNAL_SYSTEM_WINDOW` startup crash.
-- Patched 0.20 enabled and bound the real accessibility service; its bubble appeared.
-- Injected hold, move and release activated magnification, changed viewport center,
-  and returned to inactive 1x on release.
-- A separate test service's 2.5x fullscreen zoom survived controller release/cancel.
-- External scale takeover and external off canceled the controller gesture;
-  subsequent stale move/release did not restore the controller's old state.
-- A separate test service's active window magnification retained mode, scale and
-  center across controller release/cancel.
-- The empty editor retained input focus after a controller tap and received a
-  hardware key. The IME was not yet visible before that gesture (visible afterward),
-  so this run does not establish preservation of an already-visible keyboard.
-- Two forced local startup failures followed by retry stopped old renderer threads,
-  retained the new surface, and permitted another successful hold/pan/release.
+### API 37 keyboard focus
 
-Initial harness failures (literal shell quotes and a fixed two-second editor launch
-wait) were corrected; they are not counted as production failures. The emulator's
-initial framework restart and ANRs predated these tests. The test APK and its
-independent magnifier/editor are not included in the normal app APK.
+Source and compiled-bytecode inspection of 0.21 confirmed that embedded-host
+creation and relayout use public `focusable=false` parameters behind API 37 guards.
+This preserves the older-platform path and does not use hidden APIs.
 
-Remaining checks on a physical Pixel: service disable/re-enable, normal hold and
-sticky/double-tap gestures, keyboard/fold transitions, and coexistence with zoom
-enabled outside this app. Public callbacks do not identify the owning service;
-identical scale/mode handoffs and center-only changes cannot be reliably attributed.
-Active window magnification is intentionally not controlled by this fullscreen app.
-This does not claim to fix the separate Bluetooth-mouse input delay or all focus
-behavior across Android versions. See `RUNTIME_TESTS.md` for dedicated-emulator steps.
+API 37 emulator trials did **not** establish keyboard retention. They failed at
+readiness or system graphics/capture stages before a valid completed interaction.
+These failures are not app test passes or proof of an app crash. The test fixture
+now requires a focused editor and an already-visible keyboard, actual controller
+input and successful typing afterward, without reopening the keyboard after input.
 
+### Later keyboard and menu changes
 
-## Existing 0.15 application baseline
+Versions 0.23 onward have helper/source coverage and recorded Android build/lint
+checks. Software-emulator boot failures prevented usable new runtime coverage for
+the event-based observer and later menu changes. There is no completed runtime
+pass recorded here for current keyboard avoidance, menu input routing or TalkBack.
 
-The application sources in this repository come from the 0.15 source archive.
-That baseline passed its Java helper/regression suite, Android debug assembly,
-and Android lint during development. These are not device integration tests.
+The observer depends on inset events; it has no periodic polling fallback. Floating
+keyboards may not supply a usable inset. Menu/controller hiding checks verify source
+wiring, not whether every Android build suppresses hidden input correctly.
 
-An API 35 AOSP emulator installed the APK and rendered its activity, but rejected
-accessibility-service startup at `SurfaceControlViewHost.setView` with an
-`INTERNAL_SYSTEM_WINDOW` permission error. Magnification gestures were therefore
-not exercised in that emulator. No privileged permission workaround is included.
-Android 14 is the API minimum, not a claim of universal device compatibility.
+### Bluetooth mouse delay
 
-Real-device testing reported severe delays with a Bluetooth mouse connected.
-Disconnecting the mouse resolved both activation and scale-adjustment delays.
-The underlying Android implementation cause remains unconfirmed; see the README.
+Device testing observed severe delayed touch tracking and scale-adjustment input
+backlogs while a Bluetooth mouse was connected. Disconnecting it resolved those
+observations. The underlying platform cause remains unconfirmed; no universal fix
+is claimed. Stop rather than repeatedly stressing an unresponsive system.
 
-## Repository preparation
+## Current device checklist
 
-Runtime Java, resources, and manifest are unchanged from 0.15. Repository preparation
-updates documentation, ignores, test tooling, license text, and build-time signing
-configuration. Ordinary local builds now use the Android Gradle plugin's debug key;
-a private matching signer can be selected explicitly through environment variables.
-This repository preparation does not create a new application release.
+Test an update signed by the original key, retaining existing preferences. Use a
+separate clean installation when checking defaults; do not erase a working setup
+just to exercise migration.
 
-The 24 pure Java test programs were rerun during repository preparation: 416,483
-assertions passed. The available Java 21 runtime included the compiler module but
-not the `javac` launcher or Java 17 API signature archive. This rerun used the
-compiler module with `-source 17 -target 17`; it verifies Java 17 syntax/bytecode,
-not Java 17 standard-library API compatibility. The documented test script uses
-`javac --release 17` on a complete JDK. Android assembly and lint were not rerun
-for these repository-only changes because the Android build toolchain was unavailable.
+1. **Startup and recovery:** enable/disable/re-enable the service, retry startup if
+   needed, and verify magnification-off and service-disable controls remain reachable.
+2. **Gestures:** unzoomed immediate relocation and hold/pan/release; zoomed immediate
+   pan and hold/relocation. Confirm 150% relocation growth and no pre-relocation pad
+   flash. Cancel via multitouch, rotation and screen off/on.
+3. **Actions and migration:** fresh defaults are menu/zoom/none. Upgrades retain
+   previous action, position, scale, opacity, pad and hold choices. Test all tap
+   actions, triple-None cancellation and double-slide enabled/disabled behavior.
+4. **Menu:** open while zoomed, check unmagnified size and accurate touch targets,
+   and confirm the bubble cannot appear or intercept input. Test live slider updates,
+   final scale, Zoom-off remembered level, outside dismissal, reopening and Settings.
+   After dismissal, touches must reach the underlying app again.
+5. **Keyboard:** start with a docked keyboard already visible. Tap, pan, relocate
+   and use the menu without losing editor focus or typing. Test show/hide, keyboard
+   height changes, startup/retry while open, rotation/folding and screen off/on.
+   The bubble should avoid the keyboard and return to its saved position.
+6. **Layout and accessibility:** check large text, landscape, fold/unfold, system
+   bars and both navigation modes. With TalkBack, check control discovery, slider
+   range/value, Dismiss menu, and absence of hidden controller/menu nodes. System
+   Back belongs to the underlying app while the nonfocusable menu is open.
+7. **Magnification coexistence:** test externally enabled full-screen zoom, takeover
+   during a gesture and active window magnification. Public callbacks cannot identify
+   identical-state ownership handoffs or every center-only change.
+8. **Settings and diagnostics:** verify six colors, saved idle opacity, pad/hold
+   settings, system-respecting haptics and bounded 15-second capture, Clear and Copy.
 
-Run `./scripts/test.sh` for pure Java checks and
-`gradle :app:assembleDebug :app:lintDebug` for Android checks. Test reports and build
-outputs are intentionally not committed. Verify behavior on a compatible device
-before relying on a new build.
-
-## Manual checks
-
-- Immediate drag repositions the controller; hold then drag pans magnification.
-- Tap toggles persistent zoom; release ends momentary zoom.
-- The controller grows to 150% during relocation without changing color.
-- Keyboard avoidance restores the chosen position when the keyboard closes.
-- Rotation, folding, cancellation, multitouch, and service disable end active gestures safely.
-- Idle opacity, pad size, and extra hold delay update and persist.
-- Haptics respect system settings; no repeated vibration occurs during movement.
-- Diagnostic capture ends after 15 seconds across multiple gestures; Clear and Copy work.
-- Emergency magnification-off and service-disable controls remain reachable.
-
-Stop testing if the system becomes unresponsive. Do not repeatedly reproduce the
-Bluetooth-mouse delay on a device where it disrupts other applications.
+Record Android/API version, app version, connection state and exact reproduction
+steps. Review diagnostics before sharing; do not commit private device captures.
+Dedicated-emulator instructions are in [RUNTIME_TESTS.md](RUNTIME_TESTS.md).

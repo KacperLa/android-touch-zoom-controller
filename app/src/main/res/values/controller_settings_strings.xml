@@ -1,0 +1,68 @@
+<resources>
+    <string name="settings_title">Touch Zoom Settings</string>
+    <string name="app_name">Touch Zoom</string>
+    <string name="app_version">Touch Zoom %1$s</string>
+    <string name="back_to_settings">Back to Settings</string>
+    <string name="controller_actions">Controller Actions</string>
+    <string name="controller_actions_summary">Tap actions and zoom adjustment</string>
+    <string name="controller_color">Color</string>
+    <string name="idle_opacity">Idle Opacity</string>
+    <string name="advanced">Advanced</string>
+    <string name="advanced_summary">Size, delay, help and diagnostics</string>
+    <string name="controller_on">Controller on</string>
+    <string name="controller_off">Controller off</string>
+    <string name="controller_starting">Controller starting</string>
+    <string name="controller_unavailable">Controller unavailable</string>
+    <string name="enable_controller">Enable Controller</string>
+    <string name="single_tap">Single Tap</string>
+    <string name="double_tap">Double Tap</string>
+    <string name="triple_tap">Triple Tap</string>
+    <string-array name="controller_action_choices">
+        <item>None</item>
+        <item>Show Menu</item>
+        <item>Turn Zoom On/Off</item>
+    </string-array>
+    <string name="adjust_zoom_level">Adjust Zoom Level</string>
+    <string name="adjust_zoom_help">Double-tap and slide up or down, keeping your second touch down. Off keeps your Double Tap action.</string>
+    <string name="color_help">Changes the controller and menu accent color.</string>
+    <string name="color_white">White</string>
+    <string name="color_blue">Blue</string>
+    <string name="color_red">Red</string>
+    <string name="color_green">Green</string>
+    <string name="color_yellow">Yellow</string>
+    <string name="color_orange">Orange</string>
+    <string name="opacity_short_help">10–100%. Lower is more transparent.</string>
+    <string name="opacity_accessibility">Idle controller opacity, percent</string>
+    <string name="pad_size_short_help">Smaller pad, less thumb travel.</string>
+    <string name="pad_size_accessibility">Expanded touchpad long-edge size</string>
+    <string name="pad_preview_accessibility">Relative size preview: touchpad long edge %1$d dp, matching screen shape</string>
+    <string name="reset_size">Reset to 180 dp</string>
+    <string name="activation_short_help">Added to the 100 ms hold for panning or moving the controller.</string>
+    <string name="delay_accessibility">Extra hold delay, milliseconds</string>
+    <string name="extra_delay_short_value">%1$d ms extra · %2$d ms total</string>
+    <string name="zero_delay">Zero extra delay (100 ms total)</string>
+    <string name="reset_delay">Reset to 900 ms extra (1 second total)</string>
+    <string name="help_title">Help</string>
+    <string name="controls_help">Controls</string>
+    <string name="privacy_help">Privacy</string>
+    <string name="prototype_limits">Compatibility and limits</string>
+    <string name="controls_help_body">• When zoom is off: drag immediately to move the controller. Hold still, then drag to zoom and pan. Lift your finger to zoom out.\n\n• When zoom is on: drag immediately to pan. Hold still, then drag to move the controller. Zoom stays on when you lift your finger. The controller grows while you move it.\n\n• Choose single, double and triple tap actions in Controller Actions. Quick taps wait briefly for another tap. Your current selections are shown there.\n\n• With Adjust Zoom Level on, double-tap and keep your finger down on the second tap. Slide up to zoom in or down to zoom out. Lift to keep the selected zoom. Sliding down to 1× turns zoom off. Quick double taps still use your Double Tap action.\n\n• Extra hold delay adds 0–2000 ms to a 100 ms recognition pause for panning or moving the controller. Zero extra means 100 ms total. It does not add a wait to double-tap sliding.\n\n• Assign Show Menu to a tap action to open the menu. Its slider changes zoom live. When zoom is off, it saves the level for next time. The Zoom switch turns zoom on or off. Tap outside to close the menu without changing zoom. The controller hides while the menu is open.\n\n• A smaller touchpad needs less thumb travel. Near a screen edge, move the controller inward for full travel. Size is its longer edge in density-independent pixels (dp).\n\n• The controller hides while panning and returns when you lift your finger. Idle Opacity controls how far it fades. Interaction restores full opacity. Light haptics follow system settings.\n\n• The controller moves above a docked keyboard when Android reports its position, then returns when it closes. Floating keyboards may not report a usable height.\n\nSettings save without a service restart.</string>
+    <string name="privacy_help_body">This service controls magnification and displays an overlay.\n\nIt does not read screen content, capture the screen, send network traffic or inject taps.\n\nAndroid asks you to enable the accessibility service yourself.\n\nOptional diagnostics record numeric touch positions, timing, magnification state, device model and Android version. Recording lasts 15 seconds; the captured text stays in memory until cleared, replaced or the service stops. Nothing is uploaded. Copy puts the text on the clipboard so you can share it. Clear diagnostics does not erase clipboard copies.</string>
+    <string name="prototype_limits_body">Full-screen zoom only. Android 14 or newer.\n\nRotation, folding and settings changes cancel the current gesture.\n\nFloating keyboards and other accessibility services need device testing.\n\nA connected Bluetooth mouse can cause severe delay during zoom adjustment. Disconnect it if this happens.</string>
+    <string name="diagnostics_title">Diagnostics</string>
+    <string name="retry_startup">Retry controller startup</string>
+    <string name="enable_service_first">Enable the controller in accessibility settings first.</string>
+    <string name="record_diagnostic">Record 15-second diagnostic</string>
+    <string name="recording_diagnostic">Recording for 15 seconds. View or copy it afterward. No screen content recorded.</string>
+    <string name="clear_diagnostics">Clear diagnostics</string>
+    <string name="view_diagnostics">View controller diagnostics</string>
+    <string name="local_diagnostics">Local controller diagnostics</string>
+    <string name="diagnostics_unavailable">Service is off. In-memory diagnostics are unavailable.</string>
+    <string name="copy_diagnostics">Copy</string>
+    <string name="refresh">Refresh</string>
+    <string name="close">Close</string>
+    <string name="service_title">Controller service</string>
+    <string name="accessibility_settings">Open accessibility settings</string>
+    <string name="magnification_off">Turn full-screen magnification off</string>
+    <string name="disable_service">Disable controller service</string>
+</resources>
