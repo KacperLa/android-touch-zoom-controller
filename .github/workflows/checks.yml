@@ -2,7 +2,10 @@ name: Unsigned checks
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, 'cleanup/**', 'feature/tap-launch-app']
+concurrency:
+  group: unsigned-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -19,12 +22,35 @@ jobs:
           java-version: '17'
       - uses: gradle/actions/setup-gradle@017a9effdb900e5b5b2fddfb590a105619dca3c3 # v4.4.2
         with:
-          gradle-version: '8.13'
+          gradle-version: '9.3.1'
           cache-disabled: true
       - name: Install Android SDK packages
         run: |
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0'
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-37.0' 'build-tools;36.0.0'
       - name: Helper tests
         run: bash scripts/test.sh
       - name: Build unsigned APK and lint
-        run: gradle --no-daemon --no-build-cache :app:assembleRelease :app:lintRelease
+        run: gradle --no-daemon --no-build-cache :app:assembleRelease :app:lintRelease :app:assembleDebugAndroidTest
+      - name: Record build provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/ci-artifact
+          cp app/build/outputs/apk/release/app-release-unsigned.apk build/ci-artifact/
+          printf '%s\n' "$GITHUB_SHA" > build/ci-artifact/SOURCE_COMMIT.txt
+          (cd build/ci-artifact && sha256sum app-release-unsigned.apk > SHA256SUMS)
+      - name: Upload unsigned test APK
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: touch-zoom-unsigned-${{ github.sha }}
+          path: build/ci-artifact/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: touch-zoom-lint-${{ github.sha }}
+          path: app/build/reports/lint-results-release.*
+          if-no-files-found: warn
+          retention-days: 7

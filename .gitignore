@@ -44,3 +44,7 @@ captures/
 .DS_Store
 Thumbs.db
 *.swp
+
+# Python helper cache
+__pycache__/
+*.py[cod]

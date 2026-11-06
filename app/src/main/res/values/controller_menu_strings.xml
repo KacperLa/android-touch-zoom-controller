@@ -1,0 +1,9 @@
+<resources>
+ <string name="menu_title">Zoom controller</string>
+ <string name="menu_zoom_level">Zoom level</string>
+ <string name="menu_zoom">Zoom</string>
+ <string name="menu_dismiss">Dismiss zoom controller menu</string>
+ <string name="menu_zoom_failed">Zoom could not be changed</string>
+ <string name="menu_zoom_multiplier">%1$.2f times</string>
+ <string name="menu_settings">Settings</string>
+</resources>

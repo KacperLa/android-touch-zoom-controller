@@ -1,15 +1,10 @@
 <resources>
  <string name="pad_size_title">Expanded touchpad size</string>
- <string name="pad_size_help">Smaller pad = less thumb travel across the same screen. The rectangle keeps your screen’s aspect ratio. Size is its longer edge in density-independent pixels (dp). Changes save immediately; no service restart needed.</string>
  <string name="smaller">Smaller</string>
  <string name="larger">Larger</string>
  <string name="activation_title">Extra hold delay</string>
- <string name="activation_help">A fixed 100 ms pause distinguishes holding from immediate dragging. Add 0–2000 ms after that pause. Zero extra means 100 ms total, not instant zoom. Default: 900 ms extra, 1000 ms total. Drag before the total hold time to move the circle; hold still, then drag to pan. A quick tap still toggles persistent zoom.</string>
  <string name="pad_size_value">Long edge: %1$d dp</string>
  <string name="dp_value">%1$d dp</string>
- <string name="opacity_title">Idle circle opacity</string>
- <string name="opacity_help">Choose how visible the circle stays after it fades while idle. Lower values are more transparent; 100 percent stays opaque. Interaction restores full opacity. Changes save immediately.</string>
- <string name="opacity_value">Idle opacity: %1$d%%</string>
  <string name="percent_spoken">%1$d%%</string>
  <string name="extra_delay_value">Extra delay (milliseconds): %1$d; total hold (milliseconds): %2$d</string>
 </resources>

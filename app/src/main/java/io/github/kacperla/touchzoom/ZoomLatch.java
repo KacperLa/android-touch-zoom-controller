@@ -9,5 +9,6 @@ public final class ZoomLatch {
     public void cancelPendingTap(){pendingTap=false;}
     public boolean toggle(){latched=!latched;return latched;}
     public boolean commitTap(){if(!pendingTap)return false;pendingTap=false;toggle();return true;}
+    public void setLatched(boolean value){latched=value;pendingTap=false;}
     public void clear(){latched=false;pendingTap=false;}
 }

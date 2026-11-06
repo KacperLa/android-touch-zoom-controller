@@ -5,12 +5,12 @@ public final class MomentaryZoom {
     private boolean ownsPreview;
     private float selectedScale = 2;
     public void begin(float scale) {
-        selectedScale = Mapping.clamp(Float.isFinite(scale) ? scale : 2, 1.1f, 8);
+        selectedScale = Mapping.clamp(Float.isFinite(scale) ? scale : 2, 1f, 8);
         ownsPreview = true;
     }
     public void select(float scale) {
         if (ownsPreview && Float.isFinite(scale) && scale > 1.01f)
-            selectedScale = Mapping.clamp(scale, 1.1f, 8);
+            selectedScale = Mapping.clamp(scale, 1f, 8);
     }
     public float selectedScale() { return selectedScale; }
     public boolean ownsPreview() { return ownsPreview; }

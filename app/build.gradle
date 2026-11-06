@@ -5,13 +5,14 @@ plugins { id 'com.android.application' }
 def retainedKey = System.getenv('TOUCH_ZOOM_KEYSTORE')
 android {
     namespace 'io.github.kacperla.touchzoom'
-    compileSdk 35
+    compileSdk { version = release(37) { minorApiLevel = 0 } }
     defaultConfig {
         applicationId 'io.github.kacperla.touchzoom'
         minSdk 34
-        targetSdk 35
-        versionCode 15
-        versionName '0.15-buffered-input'
+        targetSdk 36
+        testInstrumentationRunner 'io.github.kacperla.touchzoom.ServiceRuntimeProbe'
+        versionCode 34
+        versionName '0.34-launch-app'
     }
     if (retainedKey != null && !retainedKey.isBlank()) {
         signingConfigs {
@@ -23,6 +24,13 @@ android {
             }
         }
     }
+    buildTypes {
+        release {
+            debuggable false
+            minifyEnabled false // Preserve guarded API37 helper isolation.
+        }
+    }
+    buildFeatures { buildConfig true }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
