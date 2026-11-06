@@ -458,7 +458,7 @@ public final class MainActivity extends Activity {
         for (int i = 0; i < apps.size(); i++) {
             android.content.pm.ResolveInfo app = apps.get(i);
             String name = app.loadLabel(pm).toString();
-            names[i] = counts.get(name) > 1 ? name + " (" + app.activityInfo.packageName + ")" : name;
+            names[i] = counts.get(name) > 1 ? name + " (" + app.activityInfo.packageName + "/" + app.activityInfo.name + ")" : name;
         }
         new AlertDialog.Builder(this).setTitle(R.string.choose_app)
             .setItems(names, (dialog, which) -> {
