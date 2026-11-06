@@ -13,6 +13,7 @@ public class ControllerSettingsTest {
         check(ControllerSettings.NONE == 0);
         check(ControllerSettings.MENU == 1);
         check(ControllerSettings.ZOOM == 2);
+        check(ControllerSettings.LAUNCH_APP == 3);
         check(ControllerSettings.defaultAction(1, false) == ControllerSettings.MENU);
         check(ControllerSettings.defaultAction(1, true) == ControllerSettings.ZOOM);
         for (boolean existing : new boolean[] { false, true }) {
@@ -21,7 +22,7 @@ public class ControllerSettingsTest {
         }
         for (int action = -100; action <= 100; action++) {
             check(ControllerSettings.normalizeAction(action)
-                == (action >= 0 && action <= 2 ? action : ControllerSettings.NONE));
+                == (action >= 0 && action <= 3 ? action : ControllerSettings.NONE));
         }
         check(ControllerSettings.normalizeAction(Integer.MIN_VALUE) == ControllerSettings.NONE);
         check(ControllerSettings.normalizeAction(Integer.MAX_VALUE) == ControllerSettings.NONE);
@@ -37,6 +38,8 @@ public class ControllerSettingsTest {
         check(ControllerSettings.normalizeColor(0xff800080) == ControllerSettings.COLOR_WHITE);
         for (int count = 1; count <= 3; count++) {
             check(ControllerSettings.isControllerPreference(ControllerSettings.actionKey(count)));
+            check(ControllerSettings.isControllerPreference(ControllerSettings.appKey(count)));
+            check(!ControllerSettings.actionKey(count).equals(ControllerSettings.appKey(count)));
         }
         check(ControllerSettings.isControllerPreference(ControllerSettings.ADJUST_ZOOM_KEY));
         check(ControllerSettings.isControllerPreference(ControllerSettings.COLOR_KEY));

@@ -5,7 +5,7 @@ import java.util.Map;
 
 /** Platform-independent policy for controller actions and its foreground color. */
 public final class ControllerSettings {
-    public static final int NONE = 0, MENU = 1, ZOOM = 2;
+    public static final int NONE = 0, MENU = 1, ZOOM = 2, LAUNCH_APP = 3;
     public static final String SINGLE_TAP_KEY = "single_tap_action";
     public static final String DOUBLE_TAP_KEY = "double_tap_action";
     public static final String TRIPLE_TAP_KEY = "triple_tap_action";
@@ -45,6 +45,10 @@ public final class ControllerSettings {
         }
     }
 
+    public static String appKey(int tapCount) {
+        return actionKey(tapCount) + "_app";
+    }
+
     /** Existing installations retain the old single-tap zoom toggle. */
     public static int defaultAction(int tapCount, boolean existingInstallation) {
         switch (tapCount) {
@@ -56,7 +60,7 @@ public final class ControllerSettings {
     }
 
     public static int normalizeAction(int action) {
-        return action >= NONE && action <= ZOOM ? action : NONE;
+        return action >= NONE && action <= LAUNCH_APP ? action : NONE;
     }
 
     public static int normalizeColor(int color) {
@@ -70,6 +74,7 @@ public final class ControllerSettings {
     public static boolean isControllerPreference(String key) {
         return SINGLE_TAP_KEY.equals(key) || DOUBLE_TAP_KEY.equals(key)
             || TRIPLE_TAP_KEY.equals(key) || ADJUST_ZOOM_KEY.equals(key)
-            || COLOR_KEY.equals(key);
+            || COLOR_KEY.equals(key) || appKey(1).equals(key)
+            || appKey(2).equals(key) || appKey(3).equals(key);
     }
 }

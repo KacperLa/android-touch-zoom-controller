@@ -184,3 +184,14 @@ Android feedback rather than replaying intermediate values.
 [KacperLa/gnome-touch-zoom-controller](https://github.com/KacperLa/gnome-touch-zoom-controller)
 on October 30, 2026, with its original notices. It is reference material, not an
 Android runtime dependency or a complete GNOME extension distribution.
+
+## Launch an app with a tap gesture (0.34)
+
+In **Controller actions**, choose Single tap, Double tap, or Triple tap, select
+**Launch app**, and pick a launchable app from the list. Each gesture keeps its own
+choice. Canceling the picker leaves the existing action unchanged. Select Launch
+app again to change its target. Apps without a launcher activity and other-profile
+apps are not listed. If an app is removed or disabled, choose it again after
+reinstalling; a failed launch shows an explanatory message without changing zoom.
+The app list is obtained locally and is never uploaded. This adds no new runtime
+permission. Existing settings and zoom actions remain unchanged.

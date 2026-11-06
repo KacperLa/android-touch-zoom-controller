@@ -21,6 +21,7 @@
         <item>None</item>
         <item>Show Menu</item>
         <item>Turn Zoom On/Off</item>
+        <item>Launch app</item>
     </string-array>
     <string name="adjust_zoom_level">Adjust Zoom Level</string>
     <string name="adjust_zoom_help">Double-tap and slide up or down, keeping your second touch down. Off keeps your Double Tap action.</string>
@@ -65,4 +66,8 @@
     <string name="accessibility_settings">Open accessibility settings</string>
     <string name="magnification_off">Turn full-screen magnification off</string>
     <string name="disable_service">Disable controller service</string>
+    <string name="choose_app">Choose an app</string>
+    <string name="launch_app_summary">Launch app: %1$s</string>
+    <string name="launch_app_unavailable">Selected app is unavailable. Choose an app again in Controller actions.</string>
+    <string name="no_launchable_apps">No launchable apps found.</string>
 </resources>

@@ -2,7 +2,7 @@ name: Unsigned checks
 on:
   pull_request:
   push:
-    branches: [main, 'cleanup/**']
+    branches: [main, 'cleanup/**', 'feature/tap-launch-app']
 concurrency:
   group: unsigned-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true

@@ -694,9 +694,32 @@ public final class ZoomService extends AccessibilityService implements DisplayMa
         else {
             pendingTapWasZoomed=false;
             if(action==ControllerSettings.MENU)showControllerMenu();
+            else if(action==ControllerSettings.LAUNCH_APP)launchSelectedApp(count);
         }
         // None consumes the complete sequence, including a triple. It never falls back.
     }
+    /** User-triggered launch from the bound accessibility service, never a background timer. */
+    private void launchSelectedApp(int tapCount) {
+        android.content.ComponentName component = android.content.ComponentName.unflattenFromString(
+            prefs.getString(ControllerSettings.appKey(tapCount), ""));
+        if (component == null) {
+            android.widget.Toast.makeText(this, R.string.launch_app_unavailable, android.widget.Toast.LENGTH_LONG).show();
+            return;
+        }
+        try {
+            android.content.pm.ActivityInfo info = getPackageManager().getActivityInfo(component, 0);
+            if (!info.exported || !info.enabled || !info.applicationInfo.enabled) {
+                throw new android.content.ActivityNotFoundException();
+            }
+            Intent launch = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+                .setComponent(component).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+            startActivity(launch);
+        } catch (android.content.pm.PackageManager.NameNotFoundException
+                | android.content.ActivityNotFoundException | SecurityException failure) {
+            android.widget.Toast.makeText(this, R.string.launch_app_unavailable, android.widget.Toast.LENGTH_LONG).show();
+        }
+    }
+
     private void createMenuOverlay(){
         // Attach exactly once per startup, not per open: Android retains attached overlay handles.
         // A separate parent owns visibility, independent of the ViewRoot's child transactions.

@@ -161,14 +161,18 @@ public final class MainActivity extends Activity {
         for (int count = 1; count <= 3; count++) {
             final int tapCount = count;
             final int label = labels[count - 1];
-            SettingsRow action = row(layout, label, actionName(ControllerPreferences.action(preferences, count)), null);
+            SettingsRow action = row(layout, label, actionSummary(count), null);
             action.setOnClickListener(v -> new AlertDialog.Builder(this)
                 .setTitle(label)
                 .setSingleChoiceItems(R.array.controller_action_choices,
                     ControllerPreferences.action(preferences, tapCount), (dialog, selected) -> {
-                        preferences.edit().putInt(ControllerSettings.actionKey(tapCount), selected).apply();
-                        action.setSummary(actionName(selected));
                         dialog.dismiss();
+                        if (selected == ControllerSettings.LAUNCH_APP) {
+                            chooseApp(tapCount, action);
+                        } else {
+                            preferences.edit().putInt(ControllerSettings.actionKey(tapCount), selected).apply();
+                            action.setSummary(actionSummary(tapCount));
+                        }
                     })
                 .setNegativeButton(android.R.string.cancel, null).show());
         }
@@ -416,6 +420,54 @@ public final class MainActivity extends Activity {
 
     private void openAccessibilitySettings() {
         startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+    }
+
+    private String actionSummary(int tapCount) {
+        int selected = ControllerPreferences.action(preferences, tapCount);
+        if (selected != ControllerSettings.LAUNCH_APP) return actionName(selected);
+        String saved = preferences.getString(ControllerSettings.appKey(tapCount), "");
+        android.content.ComponentName component = android.content.ComponentName.unflattenFromString(saved);
+        if (component != null) {
+            try {
+                android.content.pm.ActivityInfo info = getPackageManager().getActivityInfo(component, 0);
+                return getString(R.string.launch_app_summary, info.loadLabel(getPackageManager()));
+            } catch (android.content.pm.PackageManager.NameNotFoundException ignored) { }
+        }
+        return getString(R.string.launch_app_unavailable);
+    }
+
+    /** Show only launchable activities. Cancel never changes the saved action or target. */
+    private void chooseApp(int tapCount, SettingsRow row) {
+        android.content.pm.PackageManager pm = getPackageManager();
+        Intent query = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
+        java.util.List<android.content.pm.ResolveInfo> apps = new java.util.ArrayList<>(
+            pm.queryIntentActivities(query, 0));
+        apps.removeIf(app -> app.activityInfo == null || !app.activityInfo.exported
+            || !app.activityInfo.enabled || !app.activityInfo.applicationInfo.enabled);
+        apps.sort(new android.content.pm.ResolveInfo.DisplayNameComparator(pm));
+        if (apps.isEmpty()) {
+            Toast.makeText(this, R.string.no_launchable_apps, Toast.LENGTH_LONG).show();
+            return;
+        }
+        CharSequence[] names = new CharSequence[apps.size()];
+        java.util.Map<String, Integer> counts = new java.util.HashMap<>();
+        for (android.content.pm.ResolveInfo app : apps) {
+            String name = app.loadLabel(pm).toString();
+            counts.put(name, counts.getOrDefault(name, 0) + 1);
+        }
+        for (int i = 0; i < apps.size(); i++) {
+            android.content.pm.ResolveInfo app = apps.get(i);
+            String name = app.loadLabel(pm).toString();
+            names[i] = counts.get(name) > 1 ? name + " (" + app.activityInfo.packageName + ")" : name;
+        }
+        new AlertDialog.Builder(this).setTitle(R.string.choose_app)
+            .setItems(names, (dialog, which) -> {
+                android.content.pm.ActivityInfo info = apps.get(which).activityInfo;
+                String component = new android.content.ComponentName(info.packageName, info.name).flattenToString();
+                preferences.edit().putString(ControllerSettings.appKey(tapCount), component)
+                    .putInt(ControllerSettings.actionKey(tapCount), ControllerSettings.LAUNCH_APP).apply();
+                row.setSummary(actionSummary(tapCount));
+            }).setNegativeButton(android.R.string.cancel, null).show();
     }
 
     private String actionName(int action) {

@@ -11,8 +11,8 @@ android {
         minSdk 34
         targetSdk 36
         testInstrumentationRunner 'io.github.kacperla.touchzoom.ServiceRuntimeProbe'
-        versionCode 33
-        versionName '0.33-repository-cleanup'
+        versionCode 34
+        versionName '0.34-launch-app'
     }
     if (retainedKey != null && !retainedKey.isBlank()) {
         signingConfigs {
