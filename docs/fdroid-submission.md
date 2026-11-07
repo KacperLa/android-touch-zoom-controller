@@ -8,6 +8,12 @@ F-Droid Data fork for submission; the included `fdroid/srclibs/` entry mirrors
 F-Droid's existing reproducible-apk-tools entry. The small categories configuration
 is only for standalone validation and does not need to be submitted.
 
+The pinned 0.33 tag predates the fastlane assets in this branch. For a 0.33
+submission, copy `fastlane/metadata/android/en-US/` to
+`metadata/io.github.kacperla.touchzoom/en-US/` in fdroiddata, omitting the 34.txt
+changelog until that version is submitted. Merging these files into main alone
+will not make them appear in the old tagged checkout.
+
 The first candidate deliberately uses the already public `v0.33-alpha.1` tag
 (commit `63919b63837bf1db4f70b8136ac931cc5d8d0715`), version code 33. Main contains
 0.34 with per-tap app launching, but that revision has no public tagged release yet.
@@ -50,9 +56,12 @@ Never upload a private keystore to F-Droid. No new signing service is required.
 
 1. Run the **F-Droid reproducibility** workflow and inspect its exact-commit result.
    It runs metadata lint, a source rebuild, source/APK scans and signature copying.
-   A GitHub runner pass is useful evidence, not proof that the F-Droid buildserver
+   [The first verification run](https://github.com/KacperLa/android-touch-zoom-controller/actions/runs/42389327416)
+   passed metadata lint, source/APK scanning, a fresh 0.33 rebuild and the original
+   signature/certificate checks. A GitHub runner pass is useful evidence, not proof that the F-Droid buildserver
    or maintainers will accept the app.
-2. Merge the upstream store metadata when reviewed. Descriptions, icon and version
+2. Merge the upstream store metadata when reviewed and include the localized
+   metadata in fdroiddata as described above when submitting the older 0.33 tag. Descriptions, icon and version
    changelogs are in `fastlane/metadata/android/en-US/`. The icon is a rasterization
    of the existing launcher vector. No fake screenshots are included; capture
    clean, non-personal screenshots from a real device/emulator if requested.

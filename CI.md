@@ -2,7 +2,7 @@
 
 ## Unsigned branch checks
 
-Pull requests and pushes to `main`, `cleanup/**` or `feature/tap-launch-app` run helper/source tests, Android release lint,
+Pull requests and pushes to `main`, `cleanup/**`, `feature/tap-launch-app` or `fdroid/**` run helper/source tests, Android release lint,
 release APK assembly and test-APK compilation without signing secrets. The workflow
 uses `pull_request`, not `pull_request_target`. Compiling instrumentation is not
 running it on an Android device.

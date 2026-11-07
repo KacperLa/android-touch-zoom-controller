@@ -3,12 +3,14 @@ on:
   pull_request:
     paths:
       - '.github/workflows/fdroid.yml'
+      - '.github/workflows/checks.yml'
       - 'fdroid/**'
       - 'fastlane/**'
   push:
     branches: [main, 'fdroid/**']
     paths:
       - '.github/workflows/fdroid.yml'
+      - '.github/workflows/checks.yml'
       - 'fdroid/**'
       - 'fastlane/**'
   workflow_dispatch:
