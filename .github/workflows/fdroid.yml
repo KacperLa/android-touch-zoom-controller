@@ -44,7 +44,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y apksigner
+          sudo apt-get install -y apksigner openjdk-17-jdk-headless
           python3 -m venv "$RUNNER_TEMP/fdroid-venv"
           "$RUNNER_TEMP/fdroid-venv/bin/pip" install 'git+https://gitlab.com/fdroid/fdroidserver.git@cdfdce835a8231996b02392bc79c1879e6bef501'
           echo "$RUNNER_TEMP/fdroid-venv/bin" >> "$GITHUB_PATH"
@@ -77,3 +77,27 @@ jobs:
             ${{ runner.temp }}/fdroid-check/unsigned/
           if-no-files-found: warn
           retention-days: 14
+
+  buildserver-java:
+    runs-on: ubuntu-24.04
+    container: debian:trixie
+    timeout-minutes: 10
+    steps:
+      - name: Install metadata reader
+        run: apt-get update && apt-get install -y ca-certificates git python3-yaml
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Verify recipe JDK installation on F-Droid's Debian base
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PYTHON'
+          import subprocess
+          from pathlib import Path
+          import yaml
+          recipe = yaml.safe_load(Path('fdroid/metadata/io.github.kacperla.touchzoom.yml').read_text())
+          commands = recipe['Builds'][0]['sudo']
+          subprocess.run(['bash', '-e', '-u', '-o', 'pipefail', '-c', '; '.join(commands)], check=True)
+          PYTHON
+          /usr/lib/jvm/java-17-openjdk-amd64/bin/javac -version

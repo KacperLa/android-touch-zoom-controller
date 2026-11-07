@@ -33,6 +33,17 @@ can contain numeric touch positions, timing, device model and Android version;
 the user explicitly chooses whether to copy/share them. No private diagnostics,
 device screenshots or signing credentials belong in a submission.
 
+## Reproduce the original compiler
+
+The existing APK reproduces with JDK 17. An unrestricted JDK 21 rebuild changes
+`classes.dex`, even with Java 17 source/target compatibility, and fails signature
+verification. The recipe explicitly sets `org.gradle.java.home` to JDK 17.
+F-Droid's Debian trixie image does not provide OpenJDK 17 in its default package
+repositories, so the disposable builder installs it from Debian bookworm and
+bookworm-security, using Debian's existing signed archive trust. This does not
+change the app or require new credentials. Do not remove the compiler pin without
+re-running the signature-copy check against the public APK.
+
 ## Preserve signing identity
 
 The candidate specifies the public upstream APK and this certificate SHA-256:
@@ -56,7 +67,9 @@ Never upload a private keystore to F-Droid. No new signing service is required.
 
 1. Run the **F-Droid reproducibility** workflow and inspect its exact-commit result.
    It runs metadata lint, a source rebuild, source/APK scans and signature copying
-   with JDK 17 and JDK 21 (the current F-Droid buildserver default).
+   with JDK 17 and JDK 21 as launcher environments, while explicitly pinning the
+   Gradle compiler/runtime to JDK 17. A separate Debian trixie job executes the
+   recipe's JDK installation commands on F-Droid's current base distribution.
    [The first verification run](https://github.com/KacperLa/android-touch-zoom-controller/actions/runs/42389327416)
    passed metadata lint, source/APK scanning, a fresh 0.33 rebuild and the original
    signature/certificate checks. A GitHub runner pass is useful evidence, not proof
