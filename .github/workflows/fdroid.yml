@@ -1,0 +1,103 @@
+name: F-Droid reproducibility
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/fdroid.yml'
+      - '.github/workflows/checks.yml'
+      - 'fdroid/**'
+      - 'fastlane/**'
+  push:
+    branches: [main, 'fdroid/**']
+    paths:
+      - '.github/workflows/fdroid.yml'
+      - '.github/workflows/checks.yml'
+      - 'fdroid/**'
+      - 'fastlane/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: fdroid-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  reproduce:
+    strategy:
+      fail-fast: false
+      matrix:
+        java: ['17', '21']
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+      - uses: gradle/actions/setup-gradle@017a9effdb900e5b5b2fddfb590a105619dca3c3 # v4.4.2
+        with:
+          gradle-version: '9.3.1'
+          cache-disabled: true
+      - name: Install public verification tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y apksigner openjdk-17-jdk-headless
+          python3 -m venv "$RUNNER_TEMP/fdroid-venv"
+          "$RUNNER_TEMP/fdroid-venv/bin/pip" install 'git+https://gitlab.com/fdroid/fdroidserver.git@cdfdce835a8231996b02392bc79c1879e6bef501'
+          echo "$RUNNER_TEMP/fdroid-venv/bin" >> "$GITHUB_PATH"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-37.0' 'build-tools;36.0.0'
+      - name: Configure isolated F-Droid workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/fdroid-check"
+          cp -R fdroid/metadata fdroid/srclibs fdroid/config "$RUNNER_TEMP/fdroid-check/"
+          printf 'sdk_path: %s\ngradle: %s\n' "$ANDROID_HOME" "$(command -v gradle)" > "$RUNNER_TEMP/fdroid-check/config.yml"
+      - name: Validate recipe formatting and metadata
+        working-directory: ${{ runner.temp }}/fdroid-check
+        run: fdroid lint --format io.github.kacperla.touchzoom
+      - name: Rebuild tagged release and verify original signature
+        working-directory: ${{ runner.temp }}/fdroid-check
+        shell: bash
+        run: |
+          set -euo pipefail
+          fdroid build --stop --no-tarball --scan-binary --verbose io.github.kacperla.touchzoom:33 2>&1 | tee fdroid-build.log
+      - name: Upload verification evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: fdroid-verification-java${{ matrix.java }}-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/fdroid-check/metadata/
+            ${{ runner.temp }}/fdroid-check/fdroid-build.log
+            ${{ runner.temp }}/fdroid-check/logs/
+            ${{ runner.temp }}/fdroid-check/unsigned/
+          if-no-files-found: warn
+          retention-days: 14
+
+  buildserver-java:
+    runs-on: ubuntu-24.04
+    container: debian:trixie
+    timeout-minutes: 10
+    steps:
+      - name: Install metadata reader
+        run: apt-get update && apt-get install -y ca-certificates git python3-yaml
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Verify recipe JDK installation on F-Droid's Debian base
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PYTHON'
+          import subprocess
+          from pathlib import Path
+          import yaml
+          recipe = yaml.safe_load(Path('fdroid/metadata/io.github.kacperla.touchzoom.yml').read_text())
+          commands = recipe['Builds'][0]['sudo']
+          subprocess.run(['bash', '-e', '-u', '-o', 'pipefail', '-c', '; '.join(commands)], check=True)
+          PYTHON
+          /usr/lib/jvm/java-17-openjdk-amd64/bin/javac -version

@@ -1,0 +1,12 @@
+Touch Zoom Controller adds a floating touch controller for Android's full-screen system magnifier. Zoom, pan and move the controller with one finger while its controls stay outside the magnified content.
+
+Features:
+- Hold and drag to zoom temporarily, or pan when already zoomed.
+- Single, double and triple tap actions, plus double-tap sliding to adjust zoom.
+- An unmagnified quick menu with a zoom slider and settings shortcut.
+- Adjustable controller color, idle opacity, touchpad size and hold delay.
+- Local settings and optional diagnostics that are shared only when you choose.
+
+Requires Android 14 or newer. Enable Touch Zoom Controller in Android accessibility settings. It uses accessibility access to control magnification and display its own overlays. It cannot read window content, capture screenshots or inject taps. The app does not request internet access and has no ads or analytics.
+
+This is early alpha software. Only the default display and full-screen magnification are supported. Keyboard, folding-device, TalkBack and manufacturer-specific behavior need broader testing. Severe input delays have been observed with a Bluetooth mouse connected; disconnect it if this occurs.

@@ -1,0 +1,65 @@
+Categories:
+  - System
+License: GPL-2.0-or-later
+SourceCode: https://github.com/KacperLa/android-touch-zoom-controller
+IssueTracker: https://github.com/KacperLa/android-touch-zoom-controller/issues
+Changelog: https://github.com/KacperLa/android-touch-zoom-controller/releases
+
+AutoName: Touch Zoom
+Summary: Control Android screen magnification with one finger
+Description: |-
+  A floating touch controller for Android's full-screen system magnifier.
+  Zoom, pan and move the controller with one finger while the controller and
+  its quick menu stay outside the magnified content.
+
+  Configure tap actions, double-tap sliding, colors, idle opacity, touchpad
+  size and hold delay. Requires Android 14 or newer and accessibility access
+  to control magnification. It cannot read window content, capture screenshots
+  or inject taps, and does not request internet access. No ads or analytics.
+
+  This is early alpha software with limited device coverage. Only the default
+  display and full-screen magnification are supported. Keyboard, folding-device,
+  TalkBack and manufacturer-specific behavior need broader testing. Severe
+  input delays have been observed with a Bluetooth mouse connected.
+
+RepoType: git
+Repo: https://github.com/KacperLa/android-touch-zoom-controller.git
+
+Builds:
+  - versionName: 0.33-repository-cleanup
+    versionCode: 33
+    commit: 63919b63837bf1db4f70b8136ac931cc5d8d0715
+    subdir: app
+    sudo:
+      - echo 'deb https://deb.debian.org/debian bookworm main' > 
+        /etc/apt/sources.list.d/touch-zoom-jdk17.list
+      - echo 'deb https://security.debian.org/debian-security bookworm-security 
+        main' >> /etc/apt/sources.list.d/touch-zoom-jdk17.list
+      - apt-get update
+      - apt-get install -y openjdk-17-jdk-headless
+    gradle:
+      - yes
+    binary: 
+      https://github.com/KacperLa/android-touch-zoom-controller/releases/download/v0.33-alpha.1/Touch-Zoom-0.33-signed.apk
+    srclibs:
+      - reproducible-apk-tools@v0.3.2
+    prebuild:
+      - printf 'org.gradle.java.home=/usr/lib/jvm/java-17-openjdk-amd64\n' >> 
+        ../gradle.properties
+      - mkdir -p ../gradle/wrapper
+      - printf 
+        'distributionUrl=https\\://services.gradle.org/distributions/gradle-9.3.1-bin.zip\n'
+        > ../gradle/wrapper/gradle-wrapper.properties
+      - sdkmanager 'platforms;android-37.0' 'build-tools;36.0.0'
+    postbuild:
+      - python3 $$reproducible-apk-tools$$/zipalign.py --page-size 16 
+        --pad-like-apksigner --replace $$OUT$$ aligned.apk
+      - mv aligned.apk $$OUT$$
+
+AllowedAPKSigningKeys: 
+  446d153476667dee48a1cfa1588cce34ceeb600c1c143b67c0f63506a18e1b0b
+
+AutoUpdateMode: None
+UpdateCheckMode: Tags
+CurrentVersion: 0.33-repository-cleanup
+CurrentVersionCode: 33

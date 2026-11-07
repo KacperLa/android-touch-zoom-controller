@@ -1,0 +1,1 @@
+Initial public alpha: one-finger zoom and pan, configurable tap gestures, an unmagnified quick menu, adjustable colors and opacity, and event-based keyboard avoidance. Android 14 or newer. Device coverage remains limited; see the repository validation checklist.
