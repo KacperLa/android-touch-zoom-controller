@@ -21,6 +21,10 @@ concurrency:
   cancel-in-progress: true
 jobs:
   reproduce:
+    strategy:
+      fail-fast: false
+      matrix:
+        java: ['17', '21']
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -30,7 +34,7 @@ jobs:
       - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: ${{ matrix.java }}
       - uses: gradle/actions/setup-gradle@017a9effdb900e5b5b2fddfb590a105619dca3c3 # v4.4.2
         with:
           gradle-version: '9.3.1'
@@ -65,7 +69,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: fdroid-verification-${{ github.sha }}
+          name: fdroid-verification-java${{ matrix.java }}-${{ github.sha }}
           path: |
             ${{ runner.temp }}/fdroid-check/metadata/
             ${{ runner.temp }}/fdroid-check/fdroid-build.log

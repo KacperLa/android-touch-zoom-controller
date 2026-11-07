@@ -55,13 +55,16 @@ Never upload a private keystore to F-Droid. No new signing service is required.
 ## Validation and remaining steps
 
 1. Run the **F-Droid reproducibility** workflow and inspect its exact-commit result.
-   It runs metadata lint, a source rebuild, source/APK scans and signature copying.
+   It runs metadata lint, a source rebuild, source/APK scans and signature copying
+   with JDK 17 and JDK 21 (the current F-Droid buildserver default).
    [The first verification run](https://github.com/KacperLa/android-touch-zoom-controller/actions/runs/42389327416)
    passed metadata lint, source/APK scanning, a fresh 0.33 rebuild and the original
-   signature/certificate checks. A GitHub runner pass is useful evidence, not proof that the F-Droid buildserver
+   signature/certificate checks. A GitHub runner pass is useful evidence, not proof
+   that the F-Droid buildserver
    or maintainers will accept the app.
 2. Merge the upstream store metadata when reviewed and include the localized
-   metadata in fdroiddata as described above when submitting the older 0.33 tag. Descriptions, icon and version
+   metadata in fdroiddata as described above when submitting the older 0.33 tag.
+   Descriptions, icon and version
    changelogs are in `fastlane/metadata/android/en-US/`. The icon is a rasterization
    of the existing launcher vector. No fake screenshots are included; capture
    clean, non-personal screenshots from a real device/emulator if requested.
