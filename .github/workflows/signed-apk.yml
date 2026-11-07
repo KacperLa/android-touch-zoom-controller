@@ -74,7 +74,7 @@ jobs:
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$key_dir/signer.jks"
           unset KEYSTORE_BASE64
           signer="$ANDROID_HOME/build-tools/35.0.0/apksigner"
-          "$signer" sign --ks "$key_dir/signer.jks" --ks-key-alias "$KEY_ALIAS" \
+          "$signer" sign --alignment-preserved true --ks "$key_dir/signer.jks" --ks-key-alias "$KEY_ALIAS" \
             --ks-pass env:STORE_PASSWORD --key-pass env:KEY_PASSWORD signed/touch-zoom.apk
           "$signer" verify --verbose --print-certs signed/touch-zoom.apk > "$key_dir/verification.txt"
           fingerprint="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$key_dir/verification.txt" | tr '[:upper:]' '[:lower:]')"

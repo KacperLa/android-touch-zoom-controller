@@ -22,7 +22,7 @@ Branch integration and its successful checks do not imply a merge into `main`.
 
 Use a trusted computer holding the original private keystore. Keep signing material
 outside the repository and outside downloaded artifacts. Align the APK, sign with
-that existing key using Android build-tools `apksigner`, then verify the certificate,
+that existing key using Android build-tools `apksigner`, using `--alignment-preserved true` with build-tools 35 or newer, then verify the certificate,
 alignment, package and version before installation. Never use a different debug key
 as a fallback when updating an existing installation.
 
@@ -84,3 +84,16 @@ choose a future distribution signing scheme. See [VALIDATION.md](VALIDATION.md).
 
 References: [GitHub encrypted secrets](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets),
 [Android apksigner](https://developer.android.com/tools/apksigner).
+
+## F-Droid verification
+
+The **F-Droid reproducibility** workflow validates the candidate metadata, rebuilds
+the existing tagged 0.33 release, scans source and APK contents, and uses F-Droid's
+signature-copy check against the public APK and original certificate. It does not
+use signing secrets, create a release, publish an F-Droid repository or submit a
+merge request. See [F-Droid submission preparation](docs/fdroid-submission.md).
+
+The manual signing workflow preserves existing ZIP alignment. This avoids the
+build-tools 35+ padding change that otherwise prevents F-Droid from copying a
+signature onto the original unsigned APK. Existing signed releases remain valid;
+the candidate recipe normalizes ZIP padding for those already published APKs.

@@ -1,0 +1,1 @@
+Add Launch App to single, double and triple tap actions. Choose a launchable app separately for each gesture. Existing controller settings are preserved.
